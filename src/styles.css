@@ -1,0 +1,1813 @@
+/* OpenImages — minimal, monochrome.
+   There is no accent color. Emphasis comes from three things only: inversion
+   (ink and paper swap), a 1px rule, and type weight. If something needs to
+   stand out, it becomes solid ink — never a hue. */
+
+:root,
+:root[data-theme="dark"] {
+  --paper: #000000;
+  --surface: #0a0a0a;
+  --raised: #141414;
+  --line: #232323;
+  --line-soft: #171717;
+
+  --ink: #ffffff;
+  --ink-dim: #8c8c8c;
+  --ink-faint: #545454;
+
+  --shadow: rgba(0, 0, 0, 0.8);
+}
+
+:root[data-theme="light"] {
+  --paper: #ffffff;
+  --surface: #fbfbfb;
+  --raised: #f2f2f2;
+  --line: #e2e2e2;
+  --line-soft: #ededed;
+
+  --ink: #000000;
+  --ink-dim: #6e6e6e;
+  --ink-faint: #a0a0a0;
+
+  --shadow: rgba(0, 0, 0, 0.16);
+}
+
+:root {
+  /* "Accent" is just ink. Kept as tokens so intent stays readable in rules. */
+  --em: var(--ink);
+  --em-soft: color-mix(in srgb, var(--ink) 9%, transparent);
+  --em-line: color-mix(in srgb, var(--ink) 34%, var(--paper));
+  --em-ink: var(--paper);
+
+  --mono: "IBM Plex Mono", ui-monospace, monospace;
+  --sans: "IBM Plex Sans", system-ui, sans-serif;
+
+  --titlebar: 40px;
+  --panel-w: 300px;
+  --bar-h: 56px;
+  --radius: 4px;
+
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-io: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+  user-select: none;
+}
+
+:where(button, select, input, textarea) {
+  font: inherit;
+  color: inherit;
+}
+
+/* ══ Shell ═══════════════════════════════════════════════════════════════ */
+
+.app {
+  display: grid;
+  grid-template-rows: var(--titlebar) 1fr;
+  height: 100%;
+  position: relative;
+  /* The window is undecorated; this hairline is all that separates the app
+     from whatever is behind it. */
+  border: 1px solid var(--line);
+}
+
+.app::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 50;
+  opacity: 0.028;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+.no-grain .app::after {
+  display: none;
+}
+
+.stagearea {
+  position: relative;
+  overflow: hidden;
+  animation: stageIn 0.26s var(--ease);
+}
+
+@keyframes stageIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+/* ══ Titlebar ════════════════════════════════════════════════════════════ */
+
+.titlebar {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  z-index: 20;
+}
+
+/* Sits behind the controls so blank titlebar space still drags the window. */
+.titlebar__grip {
+  position: absolute;
+  inset: 0;
+}
+
+.titlebar__mark {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.titlebar__mark .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ink);
+  transition: transform 0.24s var(--ease);
+}
+
+.titlebar__mark:hover .dot {
+  transform: scale(1.5);
+}
+
+.titlebar__spacer {
+  flex: 1;
+  min-width: 24px;
+}
+
+/* ── Tabs ─────────────────────────────────────────────────────────────── */
+
+.tabstrip {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tabstrip::-webkit-scrollbar {
+  display: none;
+}
+
+.tab {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 10px 0 12px;
+  max-width: 210px;
+  color: var(--ink-faint);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.15s var(--ease-io), background 0.15s var(--ease-io);
+}
+
+.tab:hover {
+  color: var(--ink-dim);
+}
+
+.tab.is-active {
+  color: var(--ink);
+  background: var(--paper);
+}
+
+/* A single rule marks the active tab. No fills, no color. */
+.tab.is-active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 1px;
+  background: var(--ink);
+}
+
+.tab.is-active::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 1px;
+  background: var(--paper);
+}
+
+.tab__glyph {
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+.tab.is-active .tab__glyph {
+  opacity: 1;
+}
+
+.tab__label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.03em;
+}
+
+.tab__doc {
+  font-size: 10.5px;
+  color: var(--ink-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 74px;
+}
+
+.tab__x {
+  display: grid;
+  place-items: center;
+  width: 15px;
+  height: 15px;
+  border: 0;
+  border-radius: 2px;
+  background: none;
+  color: currentColor;
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity 0.14s var(--ease-io), background 0.14s var(--ease-io);
+}
+
+.tab:hover .tab__x,
+.tab.is-active .tab__x {
+  opacity: 0.5;
+}
+
+.tab__x:hover {
+  opacity: 1;
+  background: var(--raised);
+}
+
+.tab__x svg {
+  width: 6px;
+  height: 6px;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  fill: none;
+}
+
+/* ── Window controls ──────────────────────────────────────────────────── */
+
+.iconbtn {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  border: 0;
+  background: none;
+  color: var(--ink-faint);
+  cursor: pointer;
+  transition: color 0.15s var(--ease-io);
+}
+
+.iconbtn:hover {
+  color: var(--ink);
+}
+
+.iconbtn svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.2;
+  stroke-linecap: round;
+  transition: transform 0.4s var(--ease);
+}
+
+.iconbtn:hover svg {
+  transform: rotate(60deg);
+}
+
+.wincontrols {
+  position: relative;
+  display: flex;
+}
+
+.wincontrols__btn {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  border: 0;
+  background: none;
+  color: var(--ink-dim);
+  cursor: pointer;
+  transition: background 0.14s var(--ease-io), color 0.14s var(--ease-io);
+}
+
+.wincontrols__btn svg {
+  width: 10px;
+  height: 10px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1;
+}
+
+.wincontrols__btn:hover {
+  background: var(--raised);
+  color: var(--ink);
+}
+
+/* Close inverts rather than turning red. */
+.wincontrols__btn--close:hover {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+/* ══ Home ════════════════════════════════════════════════════════════════ */
+
+.home {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  padding: 64px 32px 80px;
+  background: var(--paper);
+}
+
+.home__inner {
+  max-width: 940px;
+  margin: 0 auto;
+}
+
+.home__head {
+  text-align: center;
+  margin-bottom: 34px;
+}
+
+.wordmark {
+  margin: 0 0 10px;
+  font-family: var(--mono);
+  font-size: 30px;
+  font-weight: 400;
+  letter-spacing: -0.03em;
+}
+
+/* The wordmark's only flourish: the second word is hollow. */
+.wordmark em {
+  font-style: normal;
+  color: transparent;
+  -webkit-text-stroke: 1px var(--ink);
+}
+
+.home__sub {
+  margin: 0;
+  color: var(--ink-dim);
+  font-size: 13px;
+}
+
+/* ── Search ───────────────────────────────────────────────────────────── */
+
+.search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin: 0 auto 44px;
+  max-width: 560px;
+  border-bottom: 1px solid var(--line);
+  transition: border-color 0.18s var(--ease-io);
+}
+
+.search:focus-within {
+  border-color: var(--ink);
+}
+
+.search__icon {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  fill: none;
+  stroke: var(--ink-faint);
+  stroke-width: 1.4;
+  stroke-linecap: round;
+}
+
+.search input {
+  flex: 1;
+  padding: 12px;
+  background: none;
+  border: 0;
+  outline: none;
+  font-size: 14px;
+  user-select: text;
+}
+
+.search input::placeholder {
+  color: var(--ink-faint);
+}
+
+.search__clear {
+  width: 20px;
+  height: 20px;
+  border: 0;
+  background: none;
+  color: var(--ink-faint);
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.search__clear:hover {
+  color: var(--ink);
+}
+
+/* ── Sections & cards ─────────────────────────────────────────────────── */
+
+.home__section {
+  margin-bottom: 40px;
+  animation: rise 0.4s var(--ease) backwards;
+  animation-delay: calc(var(--i, 0) * 50ms);
+}
+
+.sectionhead {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.sectionhead h2 {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.sectionhead span {
+  font-size: 11.5px;
+  color: var(--ink-faint);
+}
+
+.sectionhead .rule {
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(272px, 1fr));
+  gap: 1px;
+  background: var(--line);
+  border: 1px solid var(--line);
+}
+
+/* Cards share hairlines instead of each carrying a box — one grid, one grid of
+   rules. The 1px gap over a line-colored background does the drawing. */
+.card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 15px 14px;
+  text-align: left;
+  background: var(--paper);
+  border: 0;
+  cursor: pointer;
+  animation: rise 0.36s var(--ease) backwards;
+  animation-delay: calc(var(--i, 0) * 28ms);
+  transition: background 0.16s var(--ease-io), color 0.16s var(--ease-io);
+}
+
+.card:hover {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.card__glyph {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  font-size: 15px;
+  color: var(--ink-dim);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  transition: color 0.16s var(--ease-io), border-color 0.16s var(--ease-io);
+}
+
+.card:hover .card__glyph {
+  color: var(--paper);
+  border-color: color-mix(in srgb, var(--paper) 45%, transparent);
+}
+
+.card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.card__name {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.card__blurb {
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--ink-faint);
+  transition: color 0.16s var(--ease-io);
+}
+
+.card:hover .card__blurb {
+  color: color-mix(in srgb, var(--paper) 70%, transparent);
+}
+
+.card__go {
+  margin-left: auto;
+  opacity: 0;
+  transform: translateX(-4px);
+  transition: opacity 0.16s var(--ease), transform 0.16s var(--ease);
+}
+
+.card:hover .card__go {
+  opacity: 1;
+  transform: none;
+}
+
+.home__empty {
+  padding: 48px 0;
+  text-align: center;
+  color: var(--ink-dim);
+}
+
+.home__empty em {
+  font-style: normal;
+  color: var(--ink);
+  border-bottom: 1px solid var(--line);
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+/* ══ Workspace ═══════════════════════════════════════════════════════════ */
+
+.workspace {
+  display: grid;
+  grid-template-columns: 1fr var(--panel-w);
+  grid-template-rows: 1fr var(--bar-h);
+  grid-template-areas:
+    "canvas panel"
+    "bar    bar";
+  height: 100%;
+}
+
+.workspace--empty {
+  display: grid;
+  place-items: center;
+}
+
+.workspace__canvas {
+  grid-area: canvas;
+  position: relative;
+  overflow: hidden;
+}
+
+.placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+  animation: rise 0.36s var(--ease) backwards;
+}
+
+.placeholder__glyph {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  margin-bottom: 6px;
+  font-size: 22px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.placeholder h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 500;
+}
+
+.placeholder p {
+  margin: 0;
+  color: var(--ink-dim);
+}
+
+.placeholder__hint {
+  margin-top: 4px !important;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-faint) !important;
+}
+
+/* ── Canvas ───────────────────────────────────────────────────────────── */
+
+.canvas {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 28px;
+  background-color: var(--surface);
+  background-image:
+    linear-gradient(45deg, var(--raised) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--raised) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--raised) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--raised) 75%);
+  background-size: 18px 18px;
+  background-position: 0 0, 0 9px, 9px -9px, -9px 0;
+}
+
+.no-checker .canvas {
+  background-image: none;
+}
+
+/* Zoom and pan live on this wrapper, so the image's layout box stays the fitted
+   size and normalized crop coordinates keep working through the transform. */
+.viewport {
+  position: absolute;
+  inset: 28px;
+  display: grid;
+  place-items: center;
+  transform-origin: center;
+  touch-action: none;
+}
+
+.stage {
+  position: relative;
+  max-width: 100%;
+  max-height: 100%;
+  line-height: 0;
+  box-shadow: 0 20px 60px -24px var(--shadow);
+  transition: opacity 0.13s var(--ease-io);
+}
+
+.stage.is-rendering {
+  opacity: 0.68;
+}
+
+.stage img {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+}
+
+/* ── Cropper ──────────────────────────────────────────────────────────── */
+
+.cropper {
+  position: absolute;
+  inset: 0;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.shade {
+  position: absolute;
+  background: rgba(0, 0, 0, 0.62);
+  pointer-events: none;
+}
+
+:root[data-theme="light"] .shade {
+  background: rgba(255, 255, 255, 0.68);
+}
+
+/* Two outlines — one white, one black — so the rect reads on any image. */
+.crop-rect {
+  position: absolute;
+  outline: 1px solid #fff;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.55);
+  pointer-events: none;
+}
+
+.crop-rect__grid {
+  position: absolute;
+  inset: 0;
+  opacity: 0.55;
+  background-image:
+    linear-gradient(to right, transparent 33.2%, #fff 33.2% 33.5%, transparent 33.5% 66.4%, #fff 66.4% 66.7%, transparent 66.7%),
+    linear-gradient(to bottom, transparent 33.2%, #fff 33.2% 33.5%, transparent 33.5% 66.4%, #fff 66.4% 66.7%, transparent 66.7%);
+}
+
+.cropper__hint {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  line-height: 1;
+  pointer-events: none;
+}
+
+/* Handles counter-scale against zoom (inline transform), so they stay the same
+   physical size whether the image is at 10% or 800%. */
+.crop-handle {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.65);
+  pointer-events: auto;
+}
+
+.crop-handle--nw { left: 0;    top: 0;    cursor: nwse-resize; }
+.crop-handle--n  { left: 50%;  top: 0;    cursor: ns-resize; }
+.crop-handle--ne { left: 100%; top: 0;    cursor: nesw-resize; }
+.crop-handle--w  { left: 0;    top: 50%;  cursor: ew-resize; }
+.crop-handle--e  { left: 100%; top: 50%;  cursor: ew-resize; }
+.crop-handle--sw { left: 0;    top: 100%; cursor: nesw-resize; }
+.crop-handle--s  { left: 50%;  top: 100%; cursor: ns-resize; }
+.crop-handle--se { left: 100%; top: 100%; cursor: nwse-resize; }
+
+/* The rect itself must not eat pointer events, but its handles must. */
+.crop-rect {
+  pointer-events: none;
+}
+
+/* ── Zoom bar ─────────────────────────────────────────────────────────── */
+
+.zoombar {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  opacity: 0.35;
+  transition: opacity 0.18s var(--ease-io);
+}
+
+.canvas:hover .zoombar,
+.zoombar:focus-within {
+  opacity: 1;
+}
+
+.zoombar__btn,
+.zoombar__pct {
+  min-width: 26px;
+  height: 24px;
+  padding: 0 6px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-dim);
+  background: none;
+  border: 0;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: color 0.13s var(--ease-io), background 0.13s var(--ease-io);
+}
+
+.zoombar__pct {
+  min-width: 48px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+.zoombar__btn--wide {
+  min-width: 34px;
+}
+
+.zoombar__btn:hover,
+.zoombar__pct:hover {
+  color: var(--ink);
+  background: var(--raised);
+}
+
+.zoombar__sep {
+  width: 1px;
+  height: 14px;
+  margin: 0 3px;
+  background: var(--line);
+}
+
+/* ══ Panel ═══════════════════════════════════════════════════════════════ */
+
+.panel {
+  grid-area: panel;
+  background: var(--surface);
+  border-left: 1px solid var(--line);
+  overflow-y: auto;
+  animation: slideIn 0.28s var(--ease);
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(8px);
+  }
+}
+
+.group {
+  padding: 17px 18px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.group__title {
+  margin: 0 0 14px;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.label {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+
+.note {
+  margin: 0 0 12px;
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--ink-dim);
+}
+
+.note:last-child {
+  margin-bottom: 0;
+}
+
+.note code {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--ink);
+}
+
+.note strong {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.note--err {
+  color: var(--ink);
+  padding: 8px 10px;
+  border-left: 2px solid var(--ink);
+  background: var(--raised);
+}
+
+.row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.row--dims {
+  align-items: flex-end;
+}
+
+.readout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  margin: 0 0 12px;
+  background: var(--line);
+  border: 1px solid var(--line);
+}
+
+.readout--stack {
+  grid-template-columns: 1fr;
+}
+
+.readout div {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 9px;
+  background: var(--surface);
+}
+
+.readout dt {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.readout dd {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 150px;
+}
+
+/* ══ Controls ════════════════════════════════════════════════════════════ */
+
+.btn {
+  flex: 1;
+  padding: 8px 11px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.14s var(--ease-io), background 0.14s var(--ease-io),
+    color 0.14s var(--ease-io);
+}
+
+.btn:hover:not(:disabled) {
+  border-color: var(--ink-faint);
+}
+
+.btn:disabled {
+  opacity: 0.32;
+  cursor: default;
+}
+
+/* Selected state is a full inversion — the clearest possible signal without color. */
+.btn--active {
+  color: var(--paper);
+  background: var(--ink);
+  border-color: var(--ink);
+}
+
+.btn--primary {
+  color: var(--paper);
+  background: var(--ink);
+  border-color: var(--ink);
+  font-weight: 500;
+}
+
+.btn--primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--ink) 82%, var(--paper));
+  border-color: color-mix(in srgb, var(--ink) 82%, var(--paper));
+}
+
+.btn--ghost {
+  border-color: transparent;
+  color: var(--ink-dim);
+}
+
+.btn--ghost:hover:not(:disabled) {
+  color: var(--ink);
+  border-color: var(--line);
+}
+
+.btn--lg {
+  flex: none;
+  padding: 11px 26px;
+  font-size: 12px;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.chip {
+  padding: 5px 9px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--ink-dim);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: all 0.14s var(--ease-io);
+}
+
+.chip:hover {
+  color: var(--ink);
+  border-color: var(--ink-faint);
+}
+
+.chip--on {
+  color: var(--paper);
+  background: var(--ink);
+  border-color: var(--ink);
+}
+
+.field {
+  display: block;
+  margin-bottom: 8px;
+}
+
+.field--inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+
+.field .label {
+  display: block;
+  margin-bottom: 5px;
+}
+
+.field--inline .label {
+  margin: 0;
+}
+
+select,
+input[type="number"],
+textarea {
+  width: 100%;
+  padding: 7px 8px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  outline: none;
+  transition: border-color 0.14s var(--ease-io);
+}
+
+select:hover,
+input[type="number"]:hover {
+  border-color: var(--ink-faint);
+}
+
+:focus-visible {
+  outline: 1px solid var(--ink);
+  outline-offset: 1px;
+}
+
+.numfield {
+  flex: 1;
+  min-width: 0;
+}
+
+.numfield .label {
+  display: block;
+  margin-bottom: 5px;
+}
+
+.link-toggle {
+  padding: 7px 6px;
+  font-family: var(--mono);
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--ink-faint);
+  cursor: pointer;
+  transition: color 0.15s var(--ease-io);
+}
+
+.link-toggle.is-on {
+  color: var(--ink);
+}
+
+.filelist {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  list-style: none;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  line-height: 1.9;
+  color: var(--ink-dim);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  animation: rise 0.26s var(--ease);
+}
+
+.filelist li::before {
+  content: "— ";
+  color: var(--ink-faint);
+}
+
+.filelist--batch {
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.filelist--batch li {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.filelist--batch li::before {
+  content: none;
+}
+
+/* A failed row is marked by a rule and full-ink text, not by turning red. */
+.filelist--batch li.is-err {
+  color: var(--ink);
+  border-left: 2px solid var(--ink);
+  padding-left: 6px;
+  margin-left: -8px;
+}
+
+.filelist__msg {
+  flex: none;
+  max-width: 130px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink-faint);
+}
+
+/* ── Color field ──────────────────────────────────────────────────────── */
+
+.colorfield {
+  margin-bottom: 12px;
+}
+
+.colorfield > .label {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.colorfield__row {
+  display: flex;
+  gap: 6px;
+}
+
+.colorfield__well {
+  position: relative;
+  flex: none;
+  width: 34px;
+  height: 30px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  cursor: pointer;
+  overflow: hidden;
+}
+
+/* The native swatch is the only saturated pixel in the app, and it has to be —
+   it's showing the user's chosen color, not decorating the UI. */
+.colorfield__well input[type="color"] {
+  position: absolute;
+  inset: -8px;
+  width: 200%;
+  height: 200%;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+.colorfield__hex {
+  flex: 1;
+  min-width: 0;
+  padding: 7px 8px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  outline: none;
+  user-select: text;
+}
+
+.colorfield input[type="range"] {
+  margin-top: 8px;
+}
+
+/* ── Anchor grid ──────────────────────────────────────────────────────── */
+
+.anchorgrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  width: 84px;
+  background: var(--line);
+  border: 1px solid var(--line);
+}
+
+.anchorgrid__cell {
+  aspect-ratio: 1;
+  background: var(--paper);
+  border: 0;
+  cursor: pointer;
+  transition: background 0.13s var(--ease-io);
+}
+
+.anchorgrid__cell:hover {
+  background: var(--raised);
+}
+
+.anchorgrid__cell.is-on {
+  background: var(--ink);
+}
+
+/* ── Palette swatches ─────────────────────────────────────────────────── */
+
+.swatchlist {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--line);
+  border: 1px solid var(--line);
+}
+
+.swatchrow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 9px;
+  background: var(--surface);
+  border: 0;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.13s var(--ease-io);
+}
+
+.swatchrow:hover {
+  background: var(--raised);
+}
+
+.swatchrow__chip {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+}
+
+.swatchrow__hex {
+  flex: 1;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.swatchrow__pct {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-faint);
+}
+
+.uribox {
+  height: 84px;
+  margin-bottom: 10px;
+  resize: none;
+  line-height: 1.5;
+  font-size: 10px;
+  color: var(--ink-dim);
+  user-select: text;
+}
+
+/* ── Sliders ──────────────────────────────────────────────────────────── */
+
+.slider {
+  margin-bottom: 15px;
+}
+
+.slider__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 7px;
+}
+
+.slider__val {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-faint);
+  transition: color 0.14s var(--ease-io);
+}
+
+.slider__val.is-set {
+  color: var(--ink);
+}
+
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 14px;
+  background: transparent;
+  cursor: pointer;
+}
+
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 1px;
+  /* --pct is set inline; making the fill part of the track means it can never
+     drift out of sync with the thumb. */
+  background: linear-gradient(
+    to right,
+    var(--ink) 0 var(--pct, 0%),
+    var(--line) var(--pct, 0%) 100%
+  );
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 2px;
+  height: 13px;
+  margin-top: -6px;
+  background: var(--ink);
+  box-shadow: 0 0 0 3px var(--surface);
+  transition: transform 0.13s var(--ease);
+}
+
+input[type="range"]:hover::-webkit-slider-thumb {
+  transform: scaleY(1.25);
+}
+
+/* ══ Export bar ══════════════════════════════════════════════════════════ */
+
+.exportbar {
+  grid-area: bar;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 0 18px;
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+}
+
+.exportbar__meta {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  min-width: 0;
+}
+
+.filename {
+  font-size: 12.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 240px;
+}
+
+.dims {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-faint);
+  white-space: nowrap;
+}
+
+.dims em {
+  font-style: normal;
+  color: var(--ink);
+}
+
+.arrow {
+  margin: 0 6px;
+}
+
+/* No red. An underline is enough to say "read me". */
+.warn {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--ink);
+  border-bottom: 1px solid var(--ink-faint);
+  white-space: nowrap;
+}
+
+.exportbar__controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.undogroup {
+  display: flex;
+  gap: 2px;
+  padding-right: 6px;
+  border-right: 1px solid var(--line);
+}
+
+.iconbtn--sm {
+  width: 28px;
+  height: 28px;
+  border-radius: 2px;
+}
+
+.iconbtn--sm svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 1.3;
+  stroke-linejoin: round;
+}
+
+/* No spin on these — the gear's rotate-on-hover would be nonsense here. */
+.iconbtn--sm:hover svg {
+  transform: none;
+}
+
+.iconbtn--sm:hover:not(:disabled) {
+  background: var(--raised);
+}
+
+.iconbtn--sm:disabled {
+  opacity: 0.28;
+  cursor: default;
+}
+
+.exportbar__controls .btn {
+  flex: none;
+}
+
+.exportbar__controls select {
+  width: auto;
+}
+
+.exportbar__controls input[type="range"] {
+  width: 96px;
+}
+
+.qval {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-dim);
+  width: 22px;
+}
+
+/* ══ Settings modal ══════════════════════════════════════════════════════ */
+
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+}
+
+.modal__scrim {
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--paper) 78%, transparent);
+  backdrop-filter: blur(3px);
+  animation: fade 0.16s var(--ease-io);
+}
+
+.modal__shell {
+  position: relative;
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  width: min(860px, calc(100vw - 80px));
+  height: min(560px, calc(100vh - 100px));
+  background: var(--paper);
+  border: 1px solid var(--ink);
+  overflow: hidden;
+  animation: pop 0.2s var(--ease);
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+.modal__nav {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 18px 10px;
+  border-right: 1px solid var(--line);
+}
+
+.modal__navtitle {
+  padding: 0 10px 14px;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.modal__navbtn {
+  padding: 8px 10px;
+  text-align: left;
+  font-size: 12.5px;
+  color: var(--ink-dim);
+  background: none;
+  border: 0;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: color 0.14s var(--ease-io), background 0.14s var(--ease-io);
+}
+
+.modal__navbtn:hover {
+  color: var(--ink);
+}
+
+.modal__navbtn.is-active {
+  color: var(--paper);
+  background: var(--ink);
+}
+
+.modal__navfoot {
+  margin-top: auto;
+  display: flex;
+}
+
+.modal__body {
+  position: relative;
+  overflow-y: auto;
+  padding: 26px 30px;
+}
+
+.modal__close {
+  position: absolute;
+  top: 18px;
+  right: 22px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 6px;
+  background: none;
+  border: 0;
+  color: var(--ink-faint);
+  cursor: pointer;
+  transition: color 0.14s var(--ease-io);
+}
+
+.modal__close:hover {
+  color: var(--ink);
+}
+
+.modal__close svg {
+  width: 11px;
+  height: 11px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+}
+
+.modal__close span {
+  font-family: var(--mono);
+  font-size: 8.5px;
+  letter-spacing: 0.1em;
+}
+
+.modal__pane {
+  animation: paneIn 0.2s var(--ease);
+}
+
+@keyframes paneIn {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+}
+
+.panehead {
+  margin-bottom: 22px;
+}
+
+.panehead h2 {
+  margin: 0 0 4px;
+  font-size: 17px;
+  font-weight: 500;
+}
+
+.panehead p {
+  margin: 0;
+  color: var(--ink-faint);
+  font-size: 12px;
+}
+
+.setrow {
+  padding: 15px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.setrow--toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.setrow > .label {
+  display: block;
+  margin-bottom: 9px;
+}
+
+.setrow__label {
+  font-size: 13px;
+  margin-bottom: 3px;
+}
+
+.setrow__hint {
+  font-size: 11.5px;
+  color: var(--ink-faint);
+}
+
+.setrow select {
+  width: 200px;
+}
+
+.setrow input[type="range"] {
+  width: 260px;
+}
+
+/* Theme picker: two literal swatches of paper and ink. */
+.themepick {
+  display: flex;
+  gap: 8px;
+}
+
+.themepick__btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  font-family: var(--mono);
+  font-size: 11px;
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--ink-dim);
+  cursor: pointer;
+  transition: border-color 0.14s var(--ease-io), color 0.14s var(--ease-io);
+}
+
+.themepick__btn.is-on {
+  color: var(--ink);
+  border-color: var(--ink);
+}
+
+.themepick__chip {
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--ink-faint);
+  border-radius: 50%;
+}
+
+.switch {
+  position: relative;
+  flex: none;
+  width: 36px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: none;
+  cursor: pointer;
+  transition: background 0.18s var(--ease-io), border-color 0.18s var(--ease-io);
+}
+
+.switch.is-on {
+  background: var(--ink);
+  border-color: var(--ink);
+}
+
+.switch__knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--ink-faint);
+  transition: transform 0.2s var(--ease), background 0.18s var(--ease-io);
+}
+
+.switch.is-on .switch__knob {
+  background: var(--paper);
+  transform: translateX(16px);
+}
+
+/* ══ Drop veil & toast ═══════════════════════════════════════════════════ */
+
+.dropveil {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  display: grid;
+  place-items: center;
+  opacity: 0;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--paper) 86%, transparent);
+  backdrop-filter: blur(2px);
+  transition: opacity 0.16s var(--ease-io);
+}
+
+.app.is-dropping .dropveil {
+  opacity: 1;
+}
+
+.dropveil span {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  padding: 28px 44px;
+  border: 1px dashed var(--ink-faint);
+}
+
+/* Inverted, so an error is unmissable without being red. */
+.toast {
+  position: absolute;
+  left: 50%;
+  bottom: 20px;
+  transform: translateX(-50%);
+  z-index: 5;
+  max-width: 70%;
+  padding: 9px 14px;
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--ink);
+  color: var(--paper);
+  animation: rise 0.22s var(--ease);
+}
+
+kbd {
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 2px 5px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  color: var(--ink-dim);
+}
+
+::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--line);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--ink-faint);
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ══ Motion opt-out ══════════════════════════════════════════════════════
+   Both the OS preference and the in-app setting land here. `transition: none`
+   rather than `0s` so in-flight transitions are cancelled, not just shortened. */
+
+.no-motion *,
+.no-motion *::before,
+.no-motion *::after {
+  animation: none !important;
+  transition: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
