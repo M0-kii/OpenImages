@@ -1,13 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
-import { message } from "@tauri-apps/plugin-dialog";
+import { open, message } from "@tauri-apps/plugin-dialog";
 
 import { Home } from "./components/Home";
 import { SettingsModal } from "./components/SettingsModal";
 import { TitleBar } from "./components/TitleBar";
 import { Workspace } from "./components/Workspace";
 import { useHistory } from "./hooks/useHistory";
-import { closeImage, openImage, supportedFormats, type DocMeta, type OutputFormat } from "./lib/api";
+import {
+  closeImage,
+  openImage,
+  supportedFormats,
+  type DocMeta,
+  type OutputFormat,
+} from "./lib/api";
 import { INITIAL_EDIT, type EditState } from "./lib/ops";
 import { useSettings } from "./state/settings";
 import type { ToolId } from "./tools/registry";
@@ -59,7 +65,10 @@ export default function App() {
         history.reset(INITIAL_EDIT);
         setFaviconFiles([]);
       } catch (e) {
-        await message(String(e), { title: "Could not open image", kind: "error" });
+        await message(String(e), {
+          title: "Could not open image",
+          kind: "error",
+        });
       }
     },
     [history],
@@ -70,20 +79,17 @@ export default function App() {
     setActive(tool);
   }, []);
 
-  const closeTab = useCallback(
-    (tool: string) => {
-      setOpenTools((ts) => {
-        const rest = ts.filter((t) => t !== tool);
-        setActive((cur) => {
-          if (cur !== tool) return cur;
-          const i = ts.indexOf(tool as ToolId);
-          return rest[i - 1] ?? rest[i] ?? HOME;
-        });
-        return rest;
+  const closeTab = useCallback((tool: string) => {
+    setOpenTools((ts) => {
+      const rest = ts.filter((t) => t !== tool);
+      setActive((cur) => {
+        if (cur !== tool) return cur;
+        const i = ts.indexOf(tool as ToolId);
+        return rest[i - 1] ?? rest[i] ?? HOME;
       });
-    },
-    [],
-  );
+      return rest;
+    });
+  }, []);
 
   const closeDoc = useCallback(() => {
     if (openId.current !== null) void closeImage(openId.current);
@@ -92,6 +98,32 @@ export default function App() {
     history.reset(INITIAL_EDIT);
     setFaviconFiles([]);
   }, [history]);
+
+  const pickFile = useCallback(async () => {
+    const path = await open({
+      multiple: false,
+      filters: [
+        {
+          name: "Images",
+          extensions: [
+            "png",
+            "jpg",
+            "jpeg",
+            "webp",
+            "bmp",
+            "tiff",
+            "tif",
+            "gif",
+            "ico",
+            "avif",
+          ],
+        },
+      ],
+    });
+    if (typeof path !== "string") return;
+    await load(path);
+    if (active === HOME) openTool(DEFAULT_DROP_TOOL);
+  }, [active, load, openTool]);
 
   // Tauri delivers OS file drops through the webview, not HTML drag events.
   useEffect(() => {
@@ -121,6 +153,9 @@ export default function App() {
       } else if (e.key.toLowerCase() === "y") {
         e.preventDefault();
         history.redo();
+      } else if (e.key.toLowerCase() === "o") {
+        e.preventDefault();
+        void pickFile();
       } else if (e.key === ",") {
         e.preventDefault();
         setShowSettings(true);
@@ -131,12 +166,16 @@ export default function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [history, active, closeTab]);
+  }, [history, active, closeTab, pickFile]);
 
   const tabs = useMemo(
     () => [
       { id: HOME, toolId: null, docName: null },
-      ...openTools.map((t) => ({ id: t, toolId: t, docName: doc?.name ?? null })),
+      ...openTools.map((t) => ({
+        id: t,
+        toolId: t,
+        docName: doc?.name ?? null,
+      })),
     ],
     [openTools, doc],
   );
@@ -152,10 +191,13 @@ export default function App() {
         onSettings={() => setShowSettings(true)}
       />
 
-      {/* Keying on the tab restarts the enter animation on every switch. */}
       <main className="stagearea" key={active}>
         {active === HOME ? (
-          <Home onOpen={openTool} />
+          <Home
+            onOpen={openTool}
+            onPickFile={pickFile}
+            onSettings={() => setShowSettings(true)}
+          />
         ) : (
           <Workspace
             tool={active as ToolId}
@@ -163,7 +205,7 @@ export default function App() {
             edit={edit}
             setEdit={history.set}
             history={history}
-            onLoad={load}
+            onPickFile={pickFile}
             onCloseDoc={closeDoc}
             formats={formats}
             format={format}
@@ -180,9 +222,14 @@ export default function App() {
         )}
       </main>
 
-      {showSettings && <SettingsModal formats={formats} onClose={() => setShowSettings(false)} />}
+      {showSettings && (
+        <SettingsModal
+          formats={formats}
+          onClose={() => setShowSettings(false)}
+        />
+      )}
 
-      <div className="dropveil">
+      <div className="dropveil" aria-hidden={!dropping}>
         <span>Drop to open</span>
       </div>
     </div>

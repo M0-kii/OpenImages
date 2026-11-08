@@ -26,9 +26,17 @@ const MAX_ZOOM = 32;
 const MIN_RECT = 0.004;
 
 const clamp01 = (n: number) => Math.min(1, Math.max(0, n));
-const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
+const clamp = (n: number, lo: number, hi: number) =>
+  Math.min(hi, Math.max(lo, n));
 
-export function CanvasView({ url, rendering, cropMode, crop, aspect, onCrop }: Props) {
+export function CanvasView({
+  url,
+  rendering,
+  cropMode,
+  crop,
+  aspect,
+  onCrop,
+}: Props) {
   const canvasRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
 
@@ -81,20 +89,23 @@ export function CanvasView({ url, rendering, cropMode, crop, aspect, onCrop }: P
   }, [fit, actualSize]);
 
   /** Keep the point under the cursor pinned while the scale changes. */
-  const zoomAt = useCallback((factor: number, clientX?: number, clientY?: number) => {
-    const box = canvasRef.current?.getBoundingClientRect();
-    setZoom((z) => {
-      const next = clamp(z * factor, MIN_ZOOM, MAX_ZOOM);
-      if (box && clientX !== undefined && clientY !== undefined) {
-        // Transform origin is the canvas center, so measure the cursor from there.
-        const cx = clientX - (box.left + box.width / 2);
-        const cy = clientY - (box.top + box.height / 2);
-        const k = next / z;
-        setPan((p) => ({ x: cx - (cx - p.x) * k, y: cy - (cy - p.y) * k }));
-      }
-      return next;
-    });
-  }, []);
+  const zoomAt = useCallback(
+    (factor: number, clientX?: number, clientY?: number) => {
+      const box = canvasRef.current?.getBoundingClientRect();
+      setZoom((z) => {
+        const next = clamp(z * factor, MIN_ZOOM, MAX_ZOOM);
+        if (box && clientX !== undefined && clientY !== undefined) {
+          // Transform origin is the canvas center, so measure the cursor from there.
+          const cx = clientX - (box.left + box.width / 2);
+          const cy = clientY - (box.top + box.height / 2);
+          const k = next / z;
+          setPan((p) => ({ x: cx - (cx - p.x) * k, y: cy - (cy - p.y) * k }));
+        }
+        return next;
+      });
+    },
+    [],
+  );
 
   const onWheel = (e: React.WheelEvent) => {
     e.preventDefault();
@@ -125,7 +136,9 @@ export function CanvasView({ url, rendering, cropMode, crop, aspect, onCrop }: P
     if (e.button !== 0) return;
     if (!cropMode) return startPan(e);
 
-    const handle = (e.target as HTMLElement).dataset.handle as Handle | undefined;
+    const handle = (e.target as HTMLElement).dataset.handle as
+      | Handle
+      | undefined;
     e.currentTarget.setPointerCapture(e.pointerId);
 
     if (handle && crop) {
@@ -135,7 +148,11 @@ export function CanvasView({ url, rendering, cropMode, crop, aspect, onCrop }: P
 
     const { x, y } = toNorm(e);
     const inside =
-      crop && x >= crop.x && x <= crop.x + crop.width && y >= crop.y && y <= crop.y + crop.height;
+      crop &&
+      x >= crop.x &&
+      x <= crop.x + crop.width &&
+      y >= crop.y &&
+      y <= crop.y + crop.height;
 
     if (inside && crop) {
       drag.current = { mode: "move", ox: x, oy: y, start: crop };
@@ -150,7 +167,10 @@ export function CanvasView({ url, rendering, cropMode, crop, aspect, onCrop }: P
     if (!d) return;
 
     if (d.mode === "pan") {
-      setPan({ x: d.start.x + (e.clientX - d.ox), y: d.start.y + (e.clientY - d.oy) });
+      setPan({
+        x: d.start.x + (e.clientX - d.ox),
+        y: d.start.y + (e.clientY - d.oy),
+      });
       return;
     }
     if (!imgRef.current) return;
@@ -172,7 +192,12 @@ export function CanvasView({ url, rendering, cropMode, crop, aspect, onCrop }: P
     const d = drag.current;
     drag.current = null;
     // A click without a drag reads as "clear the selection", not a 0×0 crop.
-    if (d && d.mode === "new" && crop && (crop.width < MIN_RECT || crop.height < MIN_RECT)) {
+    if (
+      d &&
+      d.mode === "new" &&
+      crop &&
+      (crop.width < MIN_RECT || crop.height < MIN_RECT)
+    ) {
       onCrop(null);
     }
   };
@@ -180,13 +205,17 @@ export function CanvasView({ url, rendering, cropMode, crop, aspect, onCrop }: P
   if (!url) return <div className="canvas canvas--empty" ref={canvasRef} />;
 
   const panning = drag.current?.mode === "pan";
-  const cursor = spaceHeld || panning ? "grabbing" : cropMode ? "crosshair" : "grab";
+  const cursor =
+    spaceHeld || panning ? "grabbing" : cropMode ? "crosshair" : "grab";
 
   return (
     <div className="canvas" ref={canvasRef} onWheel={onWheel}>
       <div
         className="viewport"
-        style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, cursor }}
+        style={{
+          transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+          cursor,
+        }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
@@ -208,8 +237,14 @@ export function CanvasView({ url, rendering, cropMode, crop, aspect, onCrop }: P
                 <>
                   {/* Four dimming panels around the selection beat one big overlay
                       with a hole — no clip-path, no z-index games. */}
-                  <div className="shade" style={{ inset: `0 0 ${(1 - crop.y) * 100}% 0` }} />
-                  <div className="shade" style={{ inset: `${(crop.y + crop.height) * 100}% 0 0 0` }} />
+                  <div
+                    className="shade"
+                    style={{ inset: `0 0 ${(1 - crop.y) * 100}% 0` }}
+                  />
+                  <div
+                    className="shade"
+                    style={{ inset: `${(crop.y + crop.height) * 100}% 0 0 0` }}
+                  />
                   <div
                     className="shade"
                     style={{
@@ -238,13 +273,17 @@ export function CanvasView({ url, rendering, cropMode, crop, aspect, onCrop }: P
                         data-handle={h}
                         className={`crop-handle crop-handle--${h}`}
                         // Handles must stay grabbable when the image is zoomed out.
-                        style={{ transform: `translate(-50%, -50%) scale(${1 / zoom})` }}
+                        style={{
+                          transform: `translate(-50%, -50%) scale(${1 / zoom})`,
+                        }}
                       />
                     ))}
                   </div>
                 </>
               ) : (
-                <div className="cropper__hint">Drag to select a region</div>
+                <div className="cropper__hint">
+                  <span>Drag to select a region</span>
+                </div>
               )}
             </div>
           )}
@@ -252,14 +291,34 @@ export function CanvasView({ url, rendering, cropMode, crop, aspect, onCrop }: P
       </div>
 
       <div className="zoombar">
-        <button className="zoombar__btn" onClick={() => zoomAt(1 / 1.25)} aria-label="Zoom out">−</button>
+        <button
+          className="zoombar__btn"
+          onClick={() => zoomAt(1 / 1.25)}
+          aria-label="Zoom out"
+        >
+          −
+        </button>
         <button className="zoombar__pct" onClick={fit} title="Fit (Ctrl+0)">
           {Math.round(zoom * 100)}%
         </button>
-        <button className="zoombar__btn" onClick={() => zoomAt(1.25)} aria-label="Zoom in">+</button>
+        <button
+          className="zoombar__btn"
+          onClick={() => zoomAt(1.25)}
+          aria-label="Zoom in"
+        >
+          +
+        </button>
         <span className="zoombar__sep" />
-        <button className="zoombar__btn zoombar__btn--wide" onClick={fit}>Fit</button>
-        <button className="zoombar__btn zoombar__btn--wide" onClick={actualSize} title="Ctrl+1">1:1</button>
+        <button className="zoombar__btn zoombar__btn--wide" onClick={fit}>
+          Fit
+        </button>
+        <button
+          className="zoombar__btn zoombar__btn--wide"
+          onClick={actualSize}
+          title="Ctrl+1"
+        >
+          1:1
+        </button>
       </div>
     </div>
   );
@@ -269,7 +328,8 @@ export function CanvasView({ url, rendering, cropMode, crop, aspect, onCrop }: P
 function applyAspect(w: number, h: number, aspect: number, box: DOMRect) {
   const wPx = w * box.width;
   const hPx = h * box.height;
-  if (wPx / Math.max(hPx, 1e-6) > aspect) return { w: (hPx * aspect) / box.width, h };
+  if (wPx / Math.max(hPx, 1e-6) > aspect)
+    return { w: (hPx * aspect) / box.width, h };
   return { w, h: wPx / aspect / box.height };
 }
 

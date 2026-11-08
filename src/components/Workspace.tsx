@@ -4,6 +4,7 @@ import { open, save, message } from "@tauri-apps/plugin-dialog";
 import { CanvasView } from "./CanvasView";
 import { ExportBar } from "./ExportBar";
 import { ToolPanel } from "./ToolPanel";
+import { ToolIcon } from "./ToolIcon";
 import { usePreview } from "../hooks/usePreview";
 import type { History } from "../hooks/useHistory";
 import {
@@ -21,9 +22,12 @@ interface Props {
   tool: ToolId;
   doc: DocMeta | null;
   edit: EditState;
-  setEdit: (next: EditState | ((p: EditState) => EditState), coalesceKey?: string) => void;
+  setEdit: (
+    next: EditState | ((p: EditState) => EditState),
+    coalesceKey?: string,
+  ) => void;
   history: History<EditState>;
-  onLoad: (path: string) => Promise<void>;
+  onPickFile: () => Promise<void>;
   onCloseDoc: () => void;
   formats: OutputFormat[];
   format: OutputFormat;
@@ -37,8 +41,6 @@ interface Props {
   faviconFiles: string[];
   setFaviconFiles: (f: string[]) => void;
 }
-
-const EXTENSIONS = ["png", "jpg", "jpeg", "webp", "bmp", "tiff", "tif", "gif", "ico", "avif"];
 
 export function Workspace(p: Props) {
   const { doc, edit, tool: toolId } = p;
@@ -56,10 +58,7 @@ export function Workspace(p: Props) {
     [p],
   );
 
-  const pickFile = useCallback(async () => {
-    const path = await open({ multiple: false, filters: [{ name: "Images", extensions: EXTENSIONS }] });
-    if (typeof path === "string") await p.onLoad(path);
-  }, [p]);
+  const pickFile = p.onPickFile;
 
   // The crop tool is *always* cropping, so the preview must render uncropped —
   // you can't drag a rectangle around a region the preview has already removed.
@@ -106,14 +105,20 @@ export function Workspace(p: Props) {
 
   const onFavicon = useCallback(async () => {
     if (!doc) return;
-    const dir = await open({ directory: true, title: "Where should the favicon set go?" });
+    const dir = await open({
+      directory: true,
+      title: "Where should the favicon set go?",
+    });
     if (typeof dir !== "string") return;
 
     setBusy(true);
     try {
       p.setFaviconFiles(await exportFavicon(doc.id, ops, dir));
     } catch (e) {
-      await message(String(e), { title: "Favicon generation failed", kind: "error" });
+      await message(String(e), {
+        title: "Favicon generation failed",
+        kind: "error",
+      });
     } finally {
       setBusy(false);
     }
@@ -122,10 +127,7 @@ export function Workspace(p: Props) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const mod = e.ctrlKey || e.metaKey;
-      if (mod && e.key.toLowerCase() === "o") {
-        e.preventDefault();
-        void pickFile();
-      } else if (mod && e.key.toLowerCase() === "s" && doc && tool.hasExport) {
+      if (mod && e.key.toLowerCase() === "s" && doc && tool.hasExport) {
         e.preventDefault();
         void onExport();
       }
@@ -138,10 +140,18 @@ export function Workspace(p: Props) {
     return (
       <div className="workspace workspace--empty">
         <div className="placeholder">
-          <span className="placeholder__glyph" aria-hidden>{tool.glyph}</span>
-          <h2>{tool.name}</h2>
+          <span
+            className={`placeholder__glyph tool-card__icon--${tool.category}`}
+          >
+            <ToolIcon name={toolId} size={32} />
+          </span>
+          <span className="placeholder__category">{tool.category}</span>
+          <h1>{tool.name}</h1>
           <p>{tool.blurb}</p>
-          <button className="btn btn--primary btn--lg" onClick={pickFile}>Open an image</button>
+          <button className="btn btn--primary btn--lg" onClick={pickFile}>
+            <ToolIcon name="image" size={18} />
+            Open an image
+          </button>
           <p className="placeholder__hint">
             or drop one here · <kbd>Ctrl</kbd>+<kbd>O</kbd>
           </p>
@@ -161,10 +171,28 @@ export function Workspace(p: Props) {
           aspect={p.aspect}
           onCrop={(crop) => patch({ crop })}
         />
-        {error && <div className="toast toast--error">{error}</div>}
+        {rendering && (
+          <div className="preview-status" role="status">
+            Rendering preview…
+          </div>
+        )}
+        {error && (
+          <div className="toast toast--error" role="alert">
+            {error}
+          </div>
+        )}
       </div>
 
       <aside className="panel">
+        <header className="panel__head">
+          <span className={`panel__icon tool-card__icon--${tool.category}`}>
+            <ToolIcon name={toolId} size={22} />
+          </span>
+          <div>
+            <h1>{tool.name}</h1>
+            <p>{tool.blurb}</p>
+          </div>
+        </header>
         <ToolPanel
           tool={toolId}
           doc={doc}

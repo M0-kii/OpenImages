@@ -1,3 +1,4 @@
+import { useId } from "react";
 import { fromHex, toHex, type Color } from "../lib/ops";
 
 interface Props {
@@ -9,11 +10,17 @@ interface Props {
 }
 
 export function ColorField({ label, value, onChange, alpha = false }: Props) {
+  const hexId = useId();
   return (
     <div className="colorfield">
-      <span className="label">{label}</span>
+      <label className="label" htmlFor={hexId}>
+        {label}
+      </label>
       <div className="colorfield__row">
-        <label className="colorfield__well" style={{ background: toHex(value) }}>
+        <label
+          className="colorfield__well"
+          style={{ background: toHex(value) }}
+        >
           <input
             type="color"
             value={toHex(value)}
@@ -24,6 +31,7 @@ export function ColorField({ label, value, onChange, alpha = false }: Props) {
         </label>
         <input
           className="colorfield__hex"
+          id={hexId}
           value={toHex(value).toUpperCase()}
           spellCheck={false}
           onChange={(e) => {

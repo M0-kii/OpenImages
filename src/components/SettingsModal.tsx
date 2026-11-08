@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ColorField } from "./ColorField";
 import { useSettings, type Theme } from "../state/settings";
 import type { OutputFormat } from "../lib/api";
@@ -21,15 +21,24 @@ export function SettingsModal({
 }) {
   const { settings, set, reset } = useSettings();
   const [pane, setPane] = useState<Pane>("appearance");
+  const dialogRef = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+    const dialog = dialogRef.current;
+    dialog?.showModal();
+    return () => dialog?.close();
+  }, []);
 
   return (
-    <div className="modal" role="dialog" aria-modal="true" aria-label="Settings">
+    <dialog
+      ref={dialogRef}
+      className="modal"
+      aria-label="Settings"
+      onCancel={(e) => {
+        e.preventDefault();
+        onClose();
+      }}
+    >
       <div className="modal__scrim" onClick={onClose} />
 
       <div className="modal__shell">
@@ -40,6 +49,7 @@ export function SettingsModal({
               key={id}
               className={`modal__navbtn ${pane === id ? "is-active" : ""}`}
               onClick={() => setPane(id)}
+              aria-pressed={pane === id}
             >
               {label}
             </button>
@@ -52,7 +62,11 @@ export function SettingsModal({
         </nav>
 
         <div className="modal__body">
-          <button className="modal__close" onClick={onClose} aria-label="Close settings">
+          <button
+            className="modal__close"
+            onClick={onClose}
+            aria-label="Close settings"
+          >
             <svg viewBox="0 0 12 12" aria-hidden>
               <path d="M1 1l10 10M11 1L1 11" />
             </svg>
@@ -64,11 +78,11 @@ export function SettingsModal({
               <>
                 <PaneHead title="Appearance" blurb="Theme and motion." />
                 <Field label="Theme">
-                  <div className="themepick">
+                  <div className="themepick" role="group" aria-label="Theme">
                     {(
                       [
-                        ["dark", "Black", "#000"],
-                        ["light", "White", "#fff"],
+                        ["dark", "Dark", "#232326"],
+                        ["light", "Light", "#f8f9fc"],
                       ] as [Theme, string, string][]
                     ).map(([id, label, chip]) => (
                       <button
@@ -77,7 +91,10 @@ export function SettingsModal({
                         onClick={() => set("theme", id)}
                         aria-pressed={settings.theme === id}
                       >
-                        <span className="themepick__chip" style={{ background: chip }} />
+                        <span
+                          className="themepick__chip"
+                          style={{ background: chip }}
+                        />
                         {label}
                       </button>
                     ))}
@@ -85,13 +102,13 @@ export function SettingsModal({
                 </Field>
                 <Toggle
                   label="Film grain"
-                  hint="A faint noise overlay on the chassis."
+                  hint="A subtle texture across the interface."
                   value={settings.grain}
                   onChange={(v) => set("grain", v)}
                 />
                 <Toggle
                   label="Reduce motion"
-                  hint="Disables transitions and entrance animations."
+                  hint="Disables interface transitions."
                   value={settings.reduceMotion}
                   onChange={(v) => set("reduceMotion", v)}
                 />
@@ -100,27 +117,36 @@ export function SettingsModal({
 
             {pane === "canvas" && (
               <>
-                <PaneHead title="Canvas" blurb="How the preview surface is drawn." />
+                <PaneHead
+                  title="Canvas"
+                  blurb="How the preview surface is drawn."
+                />
                 <Toggle
                   label="Transparency checkerboard"
-                  hint="Off shows transparent pixels as flat black."
+                  hint="Show a checkered background behind transparent pixels."
                   value={settings.checkerboard}
                   onChange={(v) => set("checkerboard", v)}
                 />
                 <p className="note">
-                  Previews render against a 1600px proxy so slider drags stay smooth. Exports
-                  always use the full-resolution source.
+                  Previews render against a 1600px proxy so slider drags stay
+                  smooth. Exports always use the full-resolution source.
                 </p>
               </>
             )}
 
             {pane === "export" && (
               <>
-                <PaneHead title="Export" blurb="Defaults for newly opened tools." />
-                <Field label="Default format">
+                <PaneHead
+                  title="Export"
+                  blurb="Defaults for newly opened tools."
+                />
+                <Field label="Default format" id="default-format">
                   <select
+                    id="default-format"
                     value={settings.defaultFormat}
-                    onChange={(e) => set("defaultFormat", e.target.value as OutputFormat)}
+                    onChange={(e) =>
+                      set("defaultFormat", e.target.value as OutputFormat)
+                    }
                   >
                     {formats.map((f) => (
                       <option key={f} value={f}>
@@ -129,14 +155,22 @@ export function SettingsModal({
                     ))}
                   </select>
                 </Field>
-                <Field label={`Default JPEG quality — ${settings.defaultQuality}`}>
+                <Field
+                  label={`Default JPEG quality: ${settings.defaultQuality}`}
+                  id="default-quality"
+                >
                   <input
+                    id="default-quality"
                     type="range"
                     min={1}
                     max={100}
                     value={settings.defaultQuality}
-                    style={{ ["--pct" as string]: `${settings.defaultQuality}%` }}
-                    onChange={(e) => set("defaultQuality", Number(e.target.value))}
+                    style={{
+                      ["--pct" as string]: `${settings.defaultQuality}%`,
+                    }}
+                    onChange={(e) =>
+                      set("defaultQuality", Number(e.target.value))
+                    }
                   />
                 </Field>
                 <div className="setrow">
@@ -146,9 +180,8 @@ export function SettingsModal({
                     onChange={(c) => set("matte", c)}
                   />
                   <p className="note">
-                    JPEG has no alpha channel. Transparent pixels are composited onto this color
-                    before encoding — without it, a circle crop would silently export as the
-                    original square.
+                    JPEG has no alpha channel. Transparent pixels are composited
+                    onto this color before saving.
                   </p>
                 </div>
               </>
@@ -172,14 +205,15 @@ export function SettingsModal({
                   </div>
                 </dl>
                 <p className="note">
-                  Every operation runs locally. No image ever leaves this machine.
+                  Every operation runs locally. No image ever leaves this
+                  machine.
                 </p>
               </>
             )}
           </div>
         </div>
       </div>
-    </div>
+    </dialog>
   );
 }
 
@@ -192,10 +226,20 @@ function PaneHead({ title, blurb }: { title: string; blurb: string }) {
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  id,
+  children,
+}: {
+  label: string;
+  id?: string;
+  children: React.ReactNode;
+}) {
   return (
     <div className="setrow">
-      <span className="label">{label}</span>
+      <label className="label" htmlFor={id}>
+        {label}
+      </label>
       {children}
     </div>
   );
