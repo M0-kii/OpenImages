@@ -11,7 +11,9 @@ type IconName =
   | "close"
   | "local"
   | "chevron"
-  | "home";
+  | "home"
+  | "sun"
+  | "moon";
 
 const icons: Record<IconName, ReactNode> = {
   all: (
@@ -217,6 +219,13 @@ const icons: Record<IconName, ReactNode> = {
   ),
   chevron: <path d="m9 5 7 7-7 7" />,
   home: <path d="m3 10 9-7 9 7v9a2 2 0 0 1-2 2h-4v-7H9v7H5a2 2 0 0 1-2-2Z" />,
+  sun: (
+    <>
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5" />
+    </>
+  ),
+  moon: <path d="M20 13a8 8 0 1 1-9-9 6 6 0 0 0 9 9Z" />,
 };
 
 export function ToolIcon({

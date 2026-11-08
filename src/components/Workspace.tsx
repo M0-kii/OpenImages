@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { open, save, message } from "@tauri-apps/plugin-dialog";
+import { open, message } from "@tauri-apps/plugin-dialog";
 
 import { CanvasView } from "./CanvasView";
 import { ExportBar } from "./ExportBar";
@@ -9,13 +9,11 @@ import { usePreview } from "../hooks/usePreview";
 import type { History } from "../hooks/useHistory";
 import {
   exportFavicon,
-  exportImage,
   outputSize,
   type DocMeta,
   type OutputFormat,
 } from "../lib/api";
 import { buildOps, INITIAL_EDIT, isDirty, type EditState } from "../lib/ops";
-import { useSettings } from "../state/settings";
 import { toolById, type ToolId } from "../tools/registry";
 
 interface Props {
@@ -29,6 +27,8 @@ interface Props {
   history: History<EditState>;
   onPickFile: () => Promise<void>;
   onCloseDoc: () => void;
+  onExport: () => Promise<void>;
+  exporting: boolean;
   formats: OutputFormat[];
   format: OutputFormat;
   setFormat: (f: OutputFormat) => void;
@@ -45,9 +45,9 @@ interface Props {
 export function Workspace(p: Props) {
   const { doc, edit, tool: toolId } = p;
   const tool = toolById(toolId);
-  const { settings } = useSettings();
 
-  const [busy, setBusy] = useState(false);
+  const [faviconBusy, setBusy] = useState(false);
+  const busy = faviconBusy || p.exporting;
   const [size, setSize] = useState<[number, number] | null>(null);
 
   /** Each field name becomes its own coalesce group, so a slider drag is one undo step. */
@@ -84,25 +84,6 @@ export function Workspace(p: Props) {
     };
   }, [doc, opsKey]);
 
-  const onExport = useCallback(async () => {
-    if (!doc) return;
-    const base = doc.name.replace(/\.[^.]+$/, "");
-    const path = await save({
-      defaultPath: `${base}-edited.${p.format}`,
-      filters: [{ name: p.format.toUpperCase(), extensions: [p.format] }],
-    });
-    if (!path) return;
-
-    setBusy(true);
-    try {
-      await exportImage(doc.id, ops, path, p.format, p.quality, settings.matte);
-    } catch (e) {
-      await message(String(e), { title: "Export failed", kind: "error" });
-    } finally {
-      setBusy(false);
-    }
-  }, [doc, ops, p.format, p.quality, settings.matte]);
-
   const onFavicon = useCallback(async () => {
     if (!doc) return;
     const dir = await open({
@@ -123,18 +104,6 @@ export function Workspace(p: Props) {
       setBusy(false);
     }
   }, [doc, ops, p]);
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const mod = e.ctrlKey || e.metaKey;
-      if (mod && e.key.toLowerCase() === "s" && doc && tool.hasExport) {
-        e.preventDefault();
-        void onExport();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [pickFile, onExport, doc, tool.hasExport]);
 
   if (!doc) {
     return (
@@ -227,7 +196,7 @@ export function Workspace(p: Props) {
         canRedo={p.history.canRedo}
         onUndo={p.history.undo}
         onRedo={p.history.redo}
-        onExport={onExport}
+        onExport={p.onExport}
         onReset={() => p.setEdit(INITIAL_EDIT)}
         onOpen={pickFile}
         onCloseDoc={p.onCloseDoc}

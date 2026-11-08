@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ColorField } from "./ColorField";
+import { Select } from "./Select";
 import { useSettings, type Theme } from "../state/settings";
 import type { OutputFormat } from "../lib/api";
 
@@ -141,19 +142,15 @@ export function SettingsModal({
                   blurb="Defaults for newly opened tools."
                 />
                 <Field label="Default format" id="default-format">
-                  <select
+                  <Select
                     id="default-format"
+                    aria-label="Default format"
                     value={settings.defaultFormat}
-                    onChange={(e) =>
-                      set("defaultFormat", e.target.value as OutputFormat)
+                    onChange={(value) =>
+                      set("defaultFormat", value as OutputFormat)
                     }
-                  >
-                    {formats.map((f) => (
-                      <option key={f} value={f}>
-                        {f.toUpperCase()}
-                      </option>
-                    ))}
-                  </select>
+                    options={formats.map((f) => [f.toUpperCase(), f] as const)}
+                  />
                 </Field>
                 <Field
                   label={`Default JPEG quality: ${settings.defaultQuality}`}

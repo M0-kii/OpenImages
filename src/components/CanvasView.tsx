@@ -66,6 +66,14 @@ export function CanvasView({
 
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
+      if (
+        e.defaultPrevented ||
+        (e.target instanceof HTMLElement &&
+          e.target.closest(
+            "input, textarea, button, [role=menu], [role=listbox], [contenteditable], dialog",
+          ))
+      )
+        return;
       if (e.code === "Space" && !e.repeat) {
         e.preventDefault();
         setSpaceHeld(true);

@@ -1,13 +1,33 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { Home } from "./Home";
-import { TOOLS } from "../tools/registry";
+import { Sidebar } from "./Sidebar";
+import { useState } from "react";
+import { TOOLS, type CategoryId } from "../tools/registry";
 
 afterEach(cleanup);
 
 function setup() {
   const actions = { onOpen: vi.fn(), onPickFile: vi.fn(), onSettings: vi.fn() };
-  const view = render(<Home {...actions} />);
+  function Library() {
+    const [category, setCategory] = useState<CategoryId | "all">("all");
+    return (
+      <>
+        <Sidebar
+          category={category}
+          onCategoryChange={setCategory}
+          onSettings={actions.onSettings}
+        />
+        <Home
+          onOpen={actions.onOpen}
+          onPickFile={actions.onPickFile}
+          category={category}
+          onCategoryChange={setCategory}
+        />
+      </>
+    );
+  }
+  const view = render(<Library />);
   return { ...actions, ...view };
 }
 
@@ -47,6 +67,7 @@ it("opens images and settings from the library controls", () => {
   expect(onPickFile).toHaveBeenCalledTimes(2);
   fireEvent.click(screen.getByRole("button", { name: /Settings/ }));
   expect(onSettings).toHaveBeenCalledOnce();
+  expect(screen.queryByText("On your device.")).toBeNull();
 });
 
 it("focuses search with slash and lets Escape clear it", () => {
@@ -57,4 +78,17 @@ it("focuses search with slash and lets Escape clear it", () => {
   fireEvent.change(search, { target: { value: "crop" } });
   fireEvent.keyDown(search, { key: "Escape" });
   expect((search as HTMLInputElement).value).toBe("");
+});
+
+it("does not move focus from an open menu when slash is pressed", () => {
+  const { container } = setup();
+  const menu = document.createElement("div");
+  menu.setAttribute("role", "menu");
+  const action = document.createElement("button");
+  action.textContent = "Open image";
+  menu.append(action);
+  container.append(menu);
+  action.focus();
+  fireEvent.keyDown(action, { key: "/" });
+  expect(document.activeElement).toBe(action);
 });

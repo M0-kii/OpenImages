@@ -1,22 +1,26 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
-import { open, message } from "@tauri-apps/plugin-dialog";
+import { open, save, message } from "@tauri-apps/plugin-dialog";
 
 import { Home } from "./components/Home";
 import { SettingsModal } from "./components/SettingsModal";
 import { TitleBar } from "./components/TitleBar";
 import { Workspace } from "./components/Workspace";
+import { Sidebar } from "./components/Sidebar";
+import { TabStrip } from "./components/TabStrip";
+import { ContextMenu, type MenuItem } from "./components/Menu";
 import { useHistory } from "./hooks/useHistory";
 import {
   closeImage,
+  exportImage,
   openImage,
   supportedFormats,
   type DocMeta,
   type OutputFormat,
 } from "./lib/api";
-import { INITIAL_EDIT, type EditState } from "./lib/ops";
+import { buildOps, isDirty, INITIAL_EDIT, type EditState } from "./lib/ops";
 import { useSettings } from "./state/settings";
-import type { ToolId } from "./tools/registry";
+import type { CategoryId, ToolId } from "./tools/registry";
 
 const HOME = "home";
 
@@ -24,7 +28,7 @@ const HOME = "home";
 const DEFAULT_DROP_TOOL: ToolId = "crop";
 
 export default function App() {
-  const { settings } = useSettings();
+  const { settings, set } = useSettings();
 
   // One document and one edit pipeline, shared by every tab. Tabs are *views*
   // onto the same image — crop in one, resize in another, and the operations
@@ -35,6 +39,8 @@ export default function App() {
 
   const [openTools, setOpenTools] = useState<ToolId[]>([]);
   const [active, setActive] = useState<string>(HOME);
+  const [category, setCategory] = useState<CategoryId | "all">("all");
+  const [exporting, setExporting] = useState(false);
 
   const [formats, setFormats] = useState<OutputFormat[]>(["png"]);
   const [format, setFormat] = useState<OutputFormat>(settings.defaultFormat);
@@ -125,6 +131,36 @@ export default function App() {
     if (active === HOME) openTool(DEFAULT_DROP_TOOL);
   }, [active, load, openTool]);
 
+  const onExport = useCallback(async () => {
+    if (!doc || exporting) return;
+    const base = doc.name.replace(/\.[^.]+$/, "");
+    const path = await save({
+      defaultPath: `${base}-edited.${format}`,
+      filters: [{ name: format.toUpperCase(), extensions: [format] }],
+    });
+    if (!path) return;
+    setExporting(true);
+    try {
+      await exportImage(
+        doc.id,
+        buildOps(edit),
+        path,
+        format,
+        quality,
+        settings.matte,
+      );
+    } catch (e) {
+      await message(String(e), { title: "Export failed", kind: "error" });
+    } finally {
+      setExporting(false);
+    }
+  }, [doc, edit, format, quality, settings.matte, exporting]);
+
+  const selectCategory = (next: CategoryId | "all") => {
+    setCategory(next);
+    setActive(HOME);
+  };
+
   // Tauri delivers OS file drops through the webview, not HTML drag events.
   useEffect(() => {
     const unlisten = getCurrentWebview().onDragDropEvent((e) => {
@@ -144,7 +180,13 @@ export default function App() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const mod = e.ctrlKey || e.metaKey;
-      if (!mod) return;
+      if (!mod || e.defaultPrevented || showSettings) return;
+      if (
+        ["z", "y"].includes(e.key.toLowerCase()) &&
+        e.target instanceof HTMLElement &&
+        e.target.closest("input, textarea, [contenteditable]")
+      )
+        return;
 
       // Ctrl+Z / Ctrl+Shift+Z (and Ctrl+Y, which Windows users reach for).
       if (e.key.toLowerCase() === "z") {
@@ -156,6 +198,9 @@ export default function App() {
       } else if (e.key.toLowerCase() === "o") {
         e.preventDefault();
         void pickFile();
+      } else if (e.key.toLowerCase() === "s" && doc) {
+        e.preventDefault();
+        void onExport();
       } else if (e.key === ",") {
         e.preventDefault();
         setShowSettings(true);
@@ -166,7 +211,7 @@ export default function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [history, active, closeTab, pickFile]);
+  }, [history, active, closeTab, pickFile, doc, onExport, showSettings]);
 
   const tabs = useMemo(
     () => [
@@ -180,58 +225,137 @@ export default function App() {
     [openTools, doc],
   );
 
-  return (
-    <div className={`app ${dropping ? "is-dropping" : ""}`}>
-      <TitleBar
-        tabs={tabs}
-        activeId={active}
-        onSelect={setActive}
-        onClose={closeTab}
-        onHome={() => setActive(HOME)}
-        onSettings={() => setShowSettings(true)}
-      />
+  const fileItems: MenuItem[] = [
+    {
+      label: "Open image…",
+      shortcut: "Ctrl O",
+      onSelect: () => void pickFile(),
+    },
+    {
+      label: exporting ? "Exporting…" : "Export image…",
+      shortcut: "Ctrl S",
+      disabled: !doc || exporting,
+      onSelect: () => void onExport(),
+    },
+    { label: "Close image", disabled: !doc || exporting, onSelect: closeDoc },
+    {
+      label: "Settings…",
+      shortcut: "Ctrl ,",
+      onSelect: () => setShowSettings(true),
+    },
+  ];
+  const editItems: MenuItem[] = [
+    {
+      label: "Undo",
+      shortcut: "Ctrl Z",
+      disabled: !history.canUndo || exporting,
+      onSelect: history.undo,
+    },
+    {
+      label: "Redo",
+      shortcut: "Ctrl Shift Z",
+      disabled: !history.canRedo || exporting,
+      onSelect: history.redo,
+    },
+    {
+      label: "Reset edits",
+      disabled: !doc || !isDirty(edit) || exporting,
+      onSelect: () => history.set(INITIAL_EDIT),
+    },
+  ];
+  const menus = [
+    { label: "File", items: fileItems },
+    { label: "Edit", items: editItems },
+    {
+      label: "View",
+      items: [
+        { label: "All tools", onSelect: () => selectCategory("all") },
+        {
+          label: "Light appearance",
+          checked: settings.theme === "light",
+          onSelect: () => set("theme", "light"),
+        },
+        {
+          label: "Dark appearance",
+          checked: settings.theme === "dark",
+          onSelect: () => set("theme", "dark"),
+        },
+        {
+          label: "Transparency grid",
+          checked: settings.checkerboard,
+          onSelect: () => set("checkerboard", !settings.checkerboard),
+        },
+      ],
+    },
+  ];
 
-      <main className="stagearea" key={active}>
-        {active === HOME ? (
-          <Home
-            onOpen={openTool}
-            onPickFile={pickFile}
-            onSettings={() => setShowSettings(true)}
+  return (
+    <ContextMenu items={[...fileItems.slice(0, 2), ...editItems, fileItems[3]]}>
+      <div className={`app ${dropping ? "is-dropping" : ""}`}>
+        <TitleBar
+          onHome={() => setActive(HOME)}
+          onSettings={() => setShowSettings(true)}
+          menus={menus}
+        />
+
+        <Sidebar
+          category={active === HOME ? category : null}
+          onCategoryChange={selectCategory}
+          onSettings={() => setShowSettings(true)}
+        />
+        <div className="foreground">
+          <TabStrip
+            tabs={tabs}
+            activeId={active}
+            onSelect={setActive}
+            onClose={closeTab}
           />
-        ) : (
-          <Workspace
-            tool={active as ToolId}
-            doc={doc}
-            edit={edit}
-            setEdit={history.set}
-            history={history}
-            onPickFile={pickFile}
-            onCloseDoc={closeDoc}
+          <main className="stagearea" key={active}>
+            {active === HOME ? (
+              <Home
+                onOpen={openTool}
+                onPickFile={pickFile}
+                category={category}
+                onCategoryChange={selectCategory}
+              />
+            ) : (
+              <Workspace
+                tool={active as ToolId}
+                doc={doc}
+                edit={edit}
+                setEdit={history.set}
+                history={history}
+                onPickFile={pickFile}
+                onCloseDoc={closeDoc}
+                onExport={onExport}
+                exporting={exporting}
+                formats={formats}
+                format={format}
+                setFormat={setFormat}
+                quality={quality}
+                setQuality={setQuality}
+                aspect={aspect}
+                setAspect={setAspect}
+                linked={linked}
+                setLinked={setLinked}
+                faviconFiles={faviconFiles}
+                setFaviconFiles={setFaviconFiles}
+              />
+            )}
+          </main>
+        </div>
+
+        {showSettings && (
+          <SettingsModal
             formats={formats}
-            format={format}
-            setFormat={setFormat}
-            quality={quality}
-            setQuality={setQuality}
-            aspect={aspect}
-            setAspect={setAspect}
-            linked={linked}
-            setLinked={setLinked}
-            faviconFiles={faviconFiles}
-            setFaviconFiles={setFaviconFiles}
+            onClose={() => setShowSettings(false)}
           />
         )}
-      </main>
 
-      {showSettings && (
-        <SettingsModal
-          formats={formats}
-          onClose={() => setShowSettings(false)}
-        />
-      )}
-
-      <div className="dropveil" aria-hidden={!dropping}>
-        <span>Drop to open</span>
+        <div className="dropveil" aria-hidden={!dropping}>
+          <span>Drop to open</span>
+        </div>
       </div>
-    </div>
+    </ContextMenu>
   );
 }

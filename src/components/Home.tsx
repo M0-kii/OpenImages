@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CATEGORIES,
   searchTools,
-  TOOLS,
   type CategoryId,
   type ToolId,
 } from "../tools/registry";
@@ -11,19 +10,17 @@ import { ToolIcon } from "./ToolIcon";
 interface Props {
   onOpen: (id: ToolId) => void;
   onPickFile: () => void;
-  onSettings: () => void;
+  category: CategoryId | "all";
+  onCategoryChange: (category: CategoryId | "all") => void;
 }
 
-const CATEGORY_ICONS = {
-  transform: "crop",
-  color: "adjust",
-  effects: "focus",
-  output: "convert",
-} as const;
-
-export function Home({ onOpen, onPickFile, onSettings }: Props) {
+export function Home({
+  onOpen,
+  onPickFile,
+  category,
+  onCategoryChange,
+}: Props) {
   const [query, setQuery] = useState("");
-  const [category, setCategory] = useState<CategoryId | "all">("all");
   const inputRef = useRef<HTMLInputElement>(null);
   const results = useMemo(
     () =>
@@ -38,10 +35,13 @@ export function Home({ onOpen, onPickFile, onSettings }: Props) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (
+        !e.defaultPrevented &&
         e.key === "/" &&
         !(
           e.target instanceof HTMLElement &&
-          e.target.closest("input, textarea, [contenteditable]")
+          e.target.closest(
+            "input, textarea, [contenteditable], [role=menu], [role=listbox], [role=dialog], dialog",
+          )
         )
       ) {
         e.preventDefault();
@@ -54,54 +54,6 @@ export function Home({ onOpen, onPickFile, onSettings }: Props) {
 
   return (
     <div className="home">
-      <aside className="library-sidebar">
-        <div className="library-sidebar__brand">
-          OpenImages<span>Made for your images.</span>
-        </div>
-        <nav className="library-nav" aria-label="Tool categories">
-          <span className="library-nav__label">Workspace</span>
-          <button
-            className={`library-nav__item ${category === "all" ? "is-active" : ""}`}
-            aria-pressed={category === "all"}
-            onClick={() => setCategory("all")}
-          >
-            <ToolIcon name="all" />
-            <span>All tools</span>
-            <span className="library-nav__count">{TOOLS.length}</span>
-          </button>
-          <span className="library-nav__label library-nav__label--categories">
-            Categories
-          </span>
-          {CATEGORIES.map((cat) => (
-            <button
-              key={cat.id}
-              className={`library-nav__item ${category === cat.id ? "is-active" : ""}`}
-              aria-pressed={category === cat.id}
-              onClick={() => setCategory(cat.id)}
-            >
-              <ToolIcon name={CATEGORY_ICONS[cat.id]} />
-              <span>{cat.name}</span>
-              <span className="library-nav__count">
-                {TOOLS.filter((t) => t.category === cat.id).length}
-              </span>
-            </button>
-          ))}
-        </nav>
-        <div className="library-sidebar__bottom">
-          <div className="local-note">
-            <ToolIcon name="local" />
-            <div>
-              On your device.<span>Your images stay with you.</span>
-            </div>
-          </div>
-          <button className="library-nav__item" onClick={onSettings}>
-            <ToolIcon name="settings" />
-            <span>Settings</span>
-            <kbd>Ctrl ,</kbd>
-          </button>
-        </div>
-      </aside>
-
       <div className="library-main">
         <header className="library-toolbar">
           <div className="library-toolbar__location">
@@ -259,7 +211,7 @@ export function Home({ onOpen, onPickFile, onSettings }: Props) {
                     className="btn"
                     onClick={() => {
                       setQuery("");
-                      setCategory("all");
+                      onCategoryChange("all");
                     }}
                   >
                     Show all tools
@@ -267,12 +219,6 @@ export function Home({ onOpen, onPickFile, onSettings }: Props) {
                 </div>
               )}
             </section>
-            <footer className="library-footer">
-              <span>A little less effort. A little more possibility.</span>
-              <span>
-                OpenImages <span>·</span> Local image toolkit
-              </span>
-            </footer>
           </div>
         </div>
       </div>

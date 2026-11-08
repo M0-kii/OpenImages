@@ -1,0 +1,75 @@
+.custom-select {
+  display: inline-block;
+  min-width: 80px;
+  max-width: 100%;
+}
+.custom-select__trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  width: 100%;
+  min-height: 36px;
+  padding: 9px 10px;
+  border: 1px solid var(--control-line);
+  border-radius: 9px;
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 12px;
+  text-align: left;
+}
+.custom-select__trigger > span,
+.custom-select__option > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.custom-select__trigger:hover:not(:disabled),
+.custom-select__trigger[aria-expanded="true"] {
+  background: var(--raised);
+  border-color: var(--ink-dim);
+}
+.custom-select__list {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  padding: 5px;
+  overflow-y: auto;
+  border: 1px solid var(--control-line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 12px;
+}
+.custom-select__list:focus {
+  outline: none;
+}
+.custom-select__option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-height: 35px;
+  padding: 8px 9px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  cursor: pointer;
+}
+.custom-select__option.is-active {
+  background: var(--em-soft);
+  border-color: var(--em-line);
+  color: var(--em);
+}
+.panel .custom-select {
+  display: block;
+  width: 100%;
+}
+.setrow > .custom-select {
+  width: min(200px, 100%);
+}
+@media (max-width: 600px) {
+  .custom-select__trigger,
+  .custom-select__option {
+    min-height: 44px;
+  }
+}

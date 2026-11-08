@@ -1,6 +1,7 @@
 import { OPAQUE_FORMATS, type DocMeta, type OutputFormat } from "../lib/api";
 import { toHex } from "../lib/ops";
 import { useSettings } from "../state/settings";
+import { Select } from "./Select";
 
 interface Props {
   doc: DocMeta;
@@ -36,18 +37,25 @@ export function ExportBar(p: Props) {
   return (
     <footer className="exportbar">
       <div className="exportbar__meta">
-        <span className="filename" title={p.doc.name}>{p.doc.name}</span>
+        <span className="filename" title={p.doc.name}>
+          {p.doc.name}
+        </span>
         <span className="dims">
           {p.doc.width}×{p.doc.height}
           {resized && (
             <>
               <span className="arrow">→</span>
-              <em>{w}×{h}</em>
+              <em>
+                {w}×{h}
+              </em>
             </>
           )}
         </span>
         {p.doc.hasAlpha && opaque && p.showFormat && (
-          <span className="warn" title={`${p.format.toUpperCase()} has no alpha channel`}>
+          <span
+            className="warn"
+            title={`${p.format.toUpperCase()} has no alpha channel`}
+          >
             transparency → {toHex(settings.matte)}
           </span>
         )}
@@ -55,13 +63,25 @@ export function ExportBar(p: Props) {
 
       <div className="exportbar__controls">
         <div className="undogroup">
-          <button className="iconbtn iconbtn--sm" onClick={p.onUndo} disabled={!p.canUndo} title="Undo (Ctrl+Z)" aria-label="Undo">
+          <button
+            className="iconbtn iconbtn--sm"
+            onClick={p.onUndo}
+            disabled={!p.canUndo}
+            title="Undo (Ctrl+Z)"
+            aria-label="Undo"
+          >
             <svg viewBox="0 0 16 16" aria-hidden>
               <path d="M6 4L2.5 7.5 6 11" />
               <path d="M2.5 7.5H10a3.5 3.5 0 010 7H7" />
             </svg>
           </button>
-          <button className="iconbtn iconbtn--sm" onClick={p.onRedo} disabled={!p.canRedo} title="Redo (Ctrl+Shift+Z)" aria-label="Redo">
+          <button
+            className="iconbtn iconbtn--sm"
+            onClick={p.onRedo}
+            disabled={!p.canRedo}
+            title="Redo (Ctrl+Shift+Z)"
+            aria-label="Redo"
+          >
             <svg viewBox="0 0 16 16" aria-hidden>
               <path d="M10 4l3.5 3.5L10 11" />
               <path d="M13.5 7.5H6a3.5 3.5 0 000 7h3" />
@@ -71,14 +91,18 @@ export function ExportBar(p: Props) {
 
         {p.showFormat && (
           <>
-            <label className="field field--inline">
-              <span className="label">Format</span>
-              <select value={p.format} onChange={(e) => p.setFormat(e.target.value as OutputFormat)}>
-                {p.formats.map((f) => (
-                  <option key={f} value={f}>{f.toUpperCase()}</option>
-                ))}
-              </select>
-            </label>
+            <div className="field field--inline">
+              <label className="label" htmlFor="export-format">
+                Format
+              </label>
+              <Select
+                id="export-format"
+                aria-label="Format"
+                value={p.format}
+                onChange={(value) => p.setFormat(value as OutputFormat)}
+                options={p.formats.map((f) => [f.toUpperCase(), f] as const)}
+              />
+            </div>
 
             {lossy && (
               <label className="field field--inline">
@@ -97,11 +121,25 @@ export function ExportBar(p: Props) {
           </>
         )}
 
-        <button className="btn btn--ghost" onClick={p.onOpen}>Open…</button>
-        <button className="btn btn--ghost" onClick={p.onReset} disabled={!p.dirty}>Reset</button>
-        <button className="btn btn--ghost" onClick={p.onCloseDoc}>Close</button>
+        <button className="btn btn--ghost" onClick={p.onOpen}>
+          Open…
+        </button>
+        <button
+          className="btn btn--ghost"
+          onClick={p.onReset}
+          disabled={!p.dirty}
+        >
+          Reset
+        </button>
+        <button className="btn btn--ghost" onClick={p.onCloseDoc}>
+          Close
+        </button>
         {p.showExport && (
-          <button className="btn btn--primary" onClick={p.onExport} disabled={p.busy}>
+          <button
+            className="btn btn--primary"
+            onClick={p.onExport}
+            disabled={p.busy}
+          >
             {p.busy ? "Exporting…" : "Export"}
           </button>
         )}

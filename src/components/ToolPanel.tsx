@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { ColorField } from "./ColorField";
 import { Slider } from "./Slider";
+import { Select } from "./Select";
 import { useDebounced } from "../hooks/useDebounced";
 import {
   batchExport,
@@ -181,7 +182,7 @@ function ResizePanel({ doc, edit, patch, linked, setLinked }: PanelProps) {
         </div>
       </Group>
       <Group title="Resampling">
-        <Select value={rz.filter} onChange={(v) => patch({ resize: { ...rz, filter: v as ResampleFilter } })} options={FILTERS} />
+        <Select aria-label="Resampling" value={rz.filter} onChange={(v) => patch({ resize: { ...rz, filter: v as ResampleFilter } })} options={FILTERS} />
         <p className="note">Lanczos3 is sharpest for photos. Nearest preserves hard pixel edges — use it for pixel art.</p>
         {edit.resize && (
           <button className="btn btn--ghost" onClick={() => patch({ resize: null })}>
@@ -804,26 +805,6 @@ function Toggle({ label, on, onClick }: { label: string; on: boolean; onClick: (
         {label}
       </button>
     </div>
-  );
-}
-
-function Select({
-  value,
-  onChange,
-  options,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  options: [string, string][];
-}) {
-  return (
-    <label className="field">
-      <select value={value} onChange={(e) => onChange(e.target.value)}>
-        {options.map(([n, v]) => (
-          <option key={v} value={v}>{n}</option>
-        ))}
-      </select>
-    </label>
   );
 }
 

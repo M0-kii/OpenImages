@@ -1,19 +1,19 @@
 import { useEffect, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { TabStrip, type Tab } from "./TabStrip";
+import { DropdownMenu, type MenuItem } from "./Menu";
 import { ToolIcon } from "./ToolIcon";
+import { useSettings } from "../state/settings";
+import logo from "../../src-tauri/icons/128x128.png";
 
 interface Props {
-  tabs: Tab[];
-  activeId: string;
-  onSelect: (id: string) => void;
-  onClose: (id: string) => void;
   onHome: () => void;
   onSettings: () => void;
+  menus: { label: string; items: MenuItem[] }[];
 }
 export function TitleBar(p: Props) {
+  const { settings, set } = useSettings();
   const [maximized, setMaximized] = useState(false);
-  const win = getCurrentWindow();
+  const [win] = useState(getCurrentWindow);
 
   useEffect(() => {
     void win.isMaximized().then(setMaximized);
@@ -29,21 +29,37 @@ export function TitleBar(p: Props) {
           header would swallow clicks on the tabs and window buttons. */}
       <div className="titlebar__grip" data-tauri-drag-region />
 
-      <button className="titlebar__mark" onClick={p.onHome} title="Home">
+      <button className="titlebar__mark" onClick={p.onHome} title="All tools">
+        <img src={logo} alt="" width={25} height={25} />
         <span>OpenImages</span>
       </button>
 
-      <TabStrip
-        tabs={p.tabs}
-        activeId={p.activeId}
-        onSelect={p.onSelect}
-        onClose={p.onClose}
-      />
+      <nav className="menubar" role="menubar" aria-label="Application menu">
+        {p.menus.map((menu) => (
+          <DropdownMenu
+            key={menu.label}
+            label={menu.label}
+            items={menu.items}
+          />
+        ))}
+      </nav>
 
       <div className="titlebar__spacer" data-tauri-drag-region />
 
       <button
-        className="iconbtn"
+        className="theme-button"
+        onClick={() =>
+          set("theme", settings.theme === "dark" ? "light" : "dark")
+        }
+        title={`Switch to ${settings.theme === "dark" ? "light" : "dark"} theme`}
+        aria-label={`Switch to ${settings.theme === "dark" ? "light" : "dark"} theme`}
+      >
+        <ToolIcon name={settings.theme === "dark" ? "moon" : "sun"} size={17} />
+        <span>Theme</span>
+      </button>
+
+      <button
+        className="iconbtn titlebar__settings"
         onClick={p.onSettings}
         title="Settings"
         aria-label="Settings"

@@ -1,0 +1,123 @@
+.colorfield__well {
+  padding: 0;
+}
+.colorfield__well:hover {
+  border-color: var(--ink);
+}
+.colorfield__error {
+  margin: 7px 0 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--ink);
+}
+.colorpicker {
+  position: fixed;
+  inset: auto;
+  width: min(280px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+  overflow-y: auto;
+  margin: 0;
+  padding: 16px;
+  border: 1px solid var(--control-line);
+  border-radius: 17px;
+  background: var(--surface);
+  color: var(--ink);
+}
+.colorpicker__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 13px;
+  font-size: 13px;
+}
+.colorpicker__header strong {
+  font-weight: 600;
+}
+.colorpicker__close {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: var(--raised);
+  color: var(--ink-dim);
+  font-size: 19px;
+}
+.colorpicker__close:hover {
+  background: var(--line);
+  color: var(--ink);
+}
+.colorpicker__surface {
+  position: relative;
+  height: 160px;
+  border: 1px solid var(--control-line);
+  border-radius: 10px;
+  background-image:
+    linear-gradient(to top, #000, transparent),
+    linear-gradient(to right, #fff, transparent);
+  cursor: crosshair;
+  touch-action: none;
+}
+.colorpicker__cursor {
+  position: absolute;
+  width: 13px;
+  height: 13px;
+  transform: translate(-50%, -50%);
+  border: 2px solid #fff;
+  outline: 1px solid #242631;
+  border-radius: 50%;
+  pointer-events: none;
+}
+.colorpicker__hue-label,
+.colorfield__alpha {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 5px 10px;
+  margin-top: 15px;
+  font-size: 11px;
+  color: var(--ink-dim);
+}
+.colorpicker__hue-label input,
+.colorfield__alpha input {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+.colorpicker .colorpicker__hue::-webkit-slider-runnable-track {
+  height: 7px;
+  background: linear-gradient(
+    to right,
+    #f00,
+    #ff0,
+    #0f0,
+    #0ff,
+    #00f,
+    #f0f,
+    #f00
+  );
+}
+.colorpicker .colorpicker__hue::-webkit-slider-thumb {
+  margin-top: -5px;
+  border-color: #242631;
+}
+.colorpicker__channels {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+.colorpicker__channels label {
+  min-width: 0;
+  font-size: 11px;
+  color: var(--ink-dim);
+}
+.colorpicker__channels span {
+  display: block;
+  margin-bottom: 5px;
+}
+.colorpicker__channels input {
+  min-width: 0;
+  font-size: 12px;
+}
