@@ -89,6 +89,22 @@ describe("buildOps", () => {
   });
 
   describe("operation order", () => {
+    it("keys source colors before resampling and runs emboss after tone", () => {
+      const color = rgb(0, 255, 0);
+      const resize = { width: 10, height: 10, filter: "lanczos3" } as const;
+      expect(buildOps(edit({
+        colorKey: { color, tolerance: 0 },
+        resize,
+        exposure: -1,
+        emboss: 50,
+      }))).toEqual([
+        { kind: "colorKey", color, tolerance: 0 },
+        { kind: "resize", ...resize },
+        { kind: "exposure", stops: -1 },
+        { kind: "emboss", amount: 50 },
+      ]);
+    });
+
     it("puts rotate and flip before crop", () => {
       // The crop rect is drawn on the rotated preview, so it is only meaningful
       // in post-rotation space. Reversing these silently crops the wrong region.

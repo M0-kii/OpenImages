@@ -162,3 +162,81 @@ it("keeps background commands from acting through Settings", async () => {
   fireEvent.keyDown(window, { key: "w", ctrlKey: true });
   expect(screen.queryByRole("tab", { name: /Crop/ })).toBeNull();
 });
+
+it("undoes separate clicks and restores shared edits from menus, sliders, and the toolbar", async () => {
+  mocks.open.mockResolvedValue("sample.png");
+  render(
+    <SettingsProvider>
+      <App />
+    </SettingsProvider>,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Open image" }));
+  await screen.findByRole("heading", { name: "Crop" });
+  fireEvent.click(screen.getByRole("tab", { name: "Home" }));
+  fireEvent.click(screen.getByRole("button", { name: /^Rotate & Flip/ }));
+  const rotate = screen.getByRole("button", { name: "↻ 90°" });
+  fireEvent.click(rotate);
+  fireEvent.click(rotate);
+  expect(screen.getByText("180°")).toBeTruthy();
+
+  fireEvent.click(
+    screen.getByRole("button", { name: "Show application menu" }),
+  );
+  fireEvent.click(screen.getByRole("menuitem", { name: "Edit" }));
+  fireEvent.click(screen.getByRole("menuitem", { name: /^Undo/ }));
+  expect(screen.getByText("90°", { selector: "strong" })).toBeTruthy();
+
+  fireEvent.click(screen.getByRole("tab", { name: "Home" }));
+  fireEvent.click(screen.getByRole("button", { name: /^Color Adjust/ }));
+  const brightness = screen.getByRole("slider", {
+    name: "Brightness",
+  }) as HTMLInputElement;
+  brightness.focus();
+  fireEvent.change(brightness, { target: { value: "30" } });
+  fireEvent.keyDown(brightness, { key: "z", ctrlKey: true });
+  expect(brightness.value).toBe("0");
+  fireEvent.keyDown(brightness, { key: "Z", ctrlKey: true, shiftKey: true });
+  expect(brightness.value).toBe("30");
+
+  fireEvent.click(screen.getByRole("button", { name: "Reset" }));
+  expect(brightness.value).toBe("0");
+  fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+  expect(brightness.value).toBe("30");
+  fireEvent.click(screen.getByRole("tab", { name: /Rotate & Flip/ }));
+  expect(screen.getByText("90°", { selector: "strong" })).toBeTruthy();
+});
+
+it("warns before flattening color-key transparency in a JPEG export", async () => {
+  localStorage.setItem(
+    "openimages.settings",
+    JSON.stringify({ defaultFormat: "jpeg" }),
+  );
+  mocks.open.mockResolvedValue("sample.png");
+  mocks.save.mockResolvedValue("sample-edited.jpeg");
+  mocks.exportImage.mockResolvedValue(undefined);
+  render(
+    <SettingsProvider>
+      <App />
+    </SettingsProvider>,
+  );
+  fireEvent.click(screen.getByRole("button", { name: /^Color Key/ }));
+  fireEvent.click(screen.getByRole("button", { name: "Open an image" }));
+  const key = await screen.findByRole("button", { name: "Remove matching color" });
+  expect(screen.queryByText(/transparency →/)).toBeNull();
+
+  fireEvent.click(key);
+  expect(screen.getByText(/transparency →/)).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Export" }));
+  await waitFor(() =>
+    expect(mocks.exportImage).toHaveBeenCalledWith(
+      1,
+      [{ kind: "colorKey", color: { r: 0, g: 255, b: 0, a: 255 }, tolerance: 15 }],
+      "sample-edited.jpeg",
+      "jpeg",
+      90,
+      { r: 255, g: 255, b: 255, a: 255 },
+    ),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+  expect(screen.queryByText(/transparency →/)).toBeNull();
+});

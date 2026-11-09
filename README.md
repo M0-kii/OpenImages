@@ -1,81 +1,43 @@
+<img src="public/logo.svg" width="64" height="64" alt="OpenImages logo">
+
 # OpenImages
 
-A local image toolkit. Crop, resize, orient, recolor, blur/sharpen, convert
-between formats, and generate a full favicon set — without uploading anything to
-a stranger's website.
+OpenImages is a desktop editor for cropping, resizing, adjusting, and converting images. Edits and exports run locally.
 
-Tauri v2 shell, React + TypeScript UI, all pixel work in Rust.
+![OpenImages tool library with a searchable grid and category sidebar](docs/screenshots/library.png)
 
-## Running it
+## Editing and export
 
-```bash
-npm install
-npm run tauri dev      # dev, with hot reload
-npm run tauri build    # installer in src-tauri/target/release/bundle/
+- **Transform:** Crop, resize, rotate, flip, pad, and round corners.
+- **Color:** Adjust exposure, levels, and temperature, or remove a flat background with Color Key.
+- **Effects:** Blur, sharpen, pixelate, add grain, or emboss an image.
+- **Output:** Export PNG, JPEG, WebP, BMP, TIFF, or ICO. Create favicon sets, extract a palette, or copy a data URI.
+
+![OpenImages workspace with an image preview, tool controls, and the export bar](docs/screenshots/workspace.png)
+
+Open an image with `Ctrl+O` or drop it into the window. Tool tabs share the same image and edits, so you can crop in one tab and resize in another. The export bar has Undo and Redo buttons; use `Ctrl+Z` and `Ctrl+Shift+Z` (or `Ctrl+Y`) from the keyboard. Reset can be undone too. Opening a new image starts a fresh history.
+
+To reuse edits across files, open an image and set up your edits. Then open **Batch Export**, select the source images, and choose an output folder. Each file receives the current edits and export format. Batch Export keeps existing files intact and reports any filename conflicts.
+
+## Run from source
+
+Install Node.js, pnpm, Rust, and the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for your platform.
+
+```sh
+pnpm install
+pnpm tauri dev
 ```
 
-Rust tests:
+Run `pnpm tauri build` to package the app. Bundles are written to `src-tauri/target/release/bundle/`.
 
-```bash
-cd src-tauri && cargo test --lib
+```sh
+pnpm test
+pnpm build
+cargo test --locked --manifest-path src-tauri/Cargo.toml --lib
 ```
 
-## How it's put together
+## How editing works
 
-The editor is one idea: an ordered list of operations applied to an image.
+The React interface turns the current edits into an ordered list of operations. Rust previews those operations on a copy capped at 1600 pixels on its longest side, then applies them to the original pixels for export. Crop coordinates are relative to the image, which lets the same crop work across different input sizes in a batch.
 
-- The UI holds an `EditState` (`src/lib/ops.ts`) and compiles it to an
-  `Operation[]`.
-- Rust applies that list (`src-tauri/src/pipeline.rs`) and hands back pixels.
-
-The shell is a browser-style tab strip inside a custom titlebar. Home is a
-permanent first tab: a searchable launcher over `src/tools/registry.ts`. Opening
-a tool gives it a tab that owns its own image, edits and export settings;
-reopening that tool returns you to it rather than starting over.
-
-**Adding a tool** means: one entry in `registry.ts` (name, blurb, keywords), one
-`Operation` variant plus an arm in `apply()` in `pipeline.rs`, and one panel case
-in `ToolPanel.tsx`. The tab, the home card, and the search all follow.
-
-### Two details worth knowing
-
-**Previews render against a proxy.** On load we cache a copy scaled to a 1600px
-longest edge. Slider drags re-render that, not your 50-megapixel source, which is
-what keeps them interactive. Exports always run the same pipeline against the
-full-resolution original. The output dimensions in the status bar come from the
-backend's full-res calculation, so the number you see is never the proxy's.
-
-**Crop coordinates are fractions, not pixels.** A crop of `{x: 0.25, width: 0.5}`
-means the same region whether it lands on the proxy or the source. This is why
-rotate and flip run *before* crop in the pipeline: you drag the rectangle on the
-rotated preview, so its coordinates are only meaningful in that space.
-
-## Notes
-
-- EXIF orientation is baked in at load. Phone photos store an unrotated sensor
-  readout plus a rotation tag; if we didn't apply it up front, a crop rectangle
-  drawn in the UI would land on the wrong pixels.
-- The format dropdown is populated from `supported_formats()`, which asks the
-  `image` crate what it can actually encode rather than trusting a hardcoded list.
-- `favicon.ico` is written by hand rather than via a library — it needs to be a
-  *multi-size* icon (16/32/48), and the container format is a header plus one
-  16-byte directory entry per PNG payload. Tests walk the bytes.
-- Non-square logos are letterboxed into square icons, not center-cropped, so a
-  wide wordmark keeps its edges.
-- JPEG export flattens alpha (the format has no alpha channel); the export bar
-  warns when that's about to happen.
-
-- The window is undecorated (`decorations: false`); the titlebar, drag region and
-  minimize/maximize/close are ours. That needs explicit `core:window:*`
-  permissions in `capabilities/default.json` — without them the buttons throw at
-  runtime, not at build time.
-- Settings live in `localStorage` and are loaded spread over defaults, so a
-  config written by an older build still boots. The accent is one CSS variable;
-  every shade derives from it with `color-mix`.
-
-## Not there yet
-
-- No undo/redo history — `Reset` clears all edits.
-- One image at a time; no batch processing.
-- Resize uses `image`'s Lanczos3. A SIMD resizer (`fast_image_resize`) would be
-  meaningfully faster on large exports.
+Resize uses `fast_image_resize` with SIMD where supported. Lanczos3 remains the default; Nearest, Triangle (bilinear), and CatmullRom are also available. JPEG export composites transparency onto the matte color set in Settings.

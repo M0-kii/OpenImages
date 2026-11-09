@@ -6,7 +6,7 @@ use base64::Engine;
 use image::{DynamicImage, ImageEncoder, ImageFormat};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::io::Cursor;
+use std::io::{BufWriter, Cursor, ErrorKind, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
@@ -218,12 +218,24 @@ pub fn batch_export(
                     .unwrap_or_else(|| "image".into());
                 let dest = dir.join(format!("{stem}{suffix}.{ext}"));
 
-                // Refusing to clobber the input is the whole reason `suffix`
-                // exists; guard it anyway in case someone empties the field.
-                if dest == src {
-                    return Err("output would overwrite the source file".into());
+                let file = std::fs::File::create_new(&dest).map_err(|error| {
+                    if error.kind() == ErrorKind::AlreadyExists {
+                        format!("output would overwrite an existing file: {}", dest.display())
+                    } else {
+                        format!("creating {}: {error}", dest.display())
+                    }
+                })?;
+                let written = {
+                    let mut writer = BufWriter::new(file);
+                    encode_to_writer(&out, &mut writer, format, quality, matte)
+                        .and_then(|()| writer.flush().map_err(|error| error.to_string()))
+                };
+                if let Err(error) = written {
+                    std::fs::remove_file(&dest).map_err(|cleanup| {
+                        format!("{error}. Could not remove incomplete output {}: {cleanup}", dest.display())
+                    })?;
+                    return Err(error);
                 }
-                encode_to_path(&out, &dest, format, quality, matte)?;
                 Ok(dest)
             };
 
@@ -655,7 +667,7 @@ mod tests {
         let src = dir.join("x.png");
         sample().save(&src).unwrap();
 
-        // Same directory, no suffix, same extension -> dest == src.
+        // Same directory, no suffix, same extension.
         let r = batch_export(
             vec![],
             vec![src.to_string_lossy().into()],
@@ -670,5 +682,62 @@ mod tests {
         assert!(!r[0].ok);
         assert!(r[0].message.contains("overwrite"), "{}", r[0].message);
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn batch_export_reports_output_collisions_without_replacing_files() {
+        let dir = scratch(&format!("batch-collisions-{}", std::process::id()));
+        std::fs::create_dir(&dir).unwrap();
+        let first = dir.join("photo.png");
+        let second = dir.join("photo.bmp");
+        let other = dir.join("other.png");
+        let output = dir.join("photo-out.png");
+        let existing = dir.join("other-out.png");
+        sample().save(&first).unwrap();
+        RgbaImage::new(40, 40).save(&second).unwrap();
+        sample().save(&other).unwrap();
+        std::fs::write(&existing, b"keep this file").unwrap();
+
+        let results = batch_export(
+            vec![],
+            [&first, &second, &other].map(|path| path.to_string_lossy().into()).to_vec(),
+            dir.to_string_lossy().into(),
+            OutputFormat::Png,
+            90,
+            WHITE,
+            "-out".into(),
+        )
+        .unwrap();
+
+        assert!(results[0].ok);
+        for result in &results[1..] {
+            assert!(!result.ok && result.message.contains("overwrite"), "{}", result.message);
+        }
+        assert_eq!(image::open(&output).unwrap().dimensions(), (120, 80));
+        assert_eq!(std::fs::read(&existing).unwrap(), b"keep this file");
+        for path in [first, second, other, output, existing] {
+            std::fs::remove_file(path).unwrap();
+        }
+        std::fs::remove_dir(dir).unwrap();
+    }
+
+    #[test]
+    fn batch_export_removes_new_file_when_encoding_fails() {
+        let src = scratch(&format!("batch-oversized-{}.png", std::process::id()));
+        RgbaImage::new(300, 300).save(&src).unwrap();
+        let dest = src.with_extension("ico");
+        let results = batch_export(
+            vec![],
+            vec![src.to_string_lossy().into()],
+            src.parent().unwrap().to_string_lossy().into(),
+            OutputFormat::Ico,
+            90,
+            WHITE,
+            "".into(),
+        )
+        .unwrap();
+        assert!(!results[0].ok && results[0].message.contains("256x256"));
+        assert!(!dest.exists(), "incomplete output was left behind");
+        std::fs::remove_file(src).unwrap();
     }
 }

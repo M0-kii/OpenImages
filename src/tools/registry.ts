@@ -2,10 +2,10 @@ export type ToolId =
   // Transform
   | "crop" | "resize" | "orient" | "pad" | "border" | "round" | "circle"
   // Color
-  | "adjust" | "gamma" | "levels" | "temperature" | "autocontrast"
-  | "sepia" | "duotone" | "posterize" | "threshold" | "filter"
+  | "adjust" | "exposure" | "gamma" | "levels" | "temperature" | "autocontrast"
+  | "sepia" | "duotone" | "posterize" | "threshold" | "filter" | "colorKey"
   // Effects
-  | "focus" | "vignette" | "pixelate" | "noise" | "shadow" | "edges" | "opacity"
+  | "focus" | "vignette" | "pixelate" | "noise" | "shadow" | "edges" | "emboss" | "opacity"
   // Output
   | "convert" | "favicon" | "palette" | "datauri" | "batch";
 
@@ -118,12 +118,21 @@ export const TOOLS: Tool[] = [
     hasExport: true,
   },
   {
+    id: "exposure",
+    name: "Exposure",
+    blurb: "Brighten or darken in stops.",
+    category: "color",
+    glyph: "☼",
+    keywords: ["exposure", "ev", "stops", "brighten", "darken"],
+    hasExport: true,
+  },
+  {
     id: "gamma",
     name: "Gamma",
     blurb: "Lift or crush midtones without clipping.",
     category: "color",
     glyph: "γ",
-    keywords: ["gamma", "midtones", "curve", "exposure", "brighten", "darken", "linear"],
+    keywords: ["gamma", "midtones", "curve", "linear"],
     hasExport: true,
   },
   {
@@ -198,6 +207,15 @@ export const TOOLS: Tool[] = [
     keywords: ["filter", "grayscale", "greyscale", "black and white", "bw", "mono", "invert", "negative"],
     hasExport: true,
   },
+  {
+    id: "colorKey",
+    name: "Color Key",
+    blurb: "Make matching colors transparent.",
+    category: "color",
+    glyph: "◈",
+    keywords: ["color key", "chroma key", "green screen", "remove background", "color mask", "tolerance"],
+    hasExport: true,
+  },
 
   // ── Effects ───────────────────────────────────────────────────────────
   {
@@ -252,6 +270,15 @@ export const TOOLS: Tool[] = [
     category: "effects",
     glyph: "⌗",
     keywords: ["edge", "edges", "sobel", "outline", "contour", "line art", "detect", "gradient"],
+    hasExport: true,
+  },
+  {
+    id: "emboss",
+    name: "Emboss",
+    blurb: "Turn edges into raised relief.",
+    category: "effects",
+    glyph: "◇",
+    keywords: ["emboss", "relief", "engrave", "bevel", "raised"],
     hasExport: true,
   },
   {

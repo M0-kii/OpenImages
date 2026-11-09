@@ -71,6 +71,12 @@ const icons: Record<IconName, ReactNode> = {
       <path d="M2 7h6m1 10h6m1-11h6" />
     </>
   ),
+  exposure: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M18.4 5.6 5.6 18.4M7 9h4M9 7v4m4 4h4" />
+    </>
+  ),
   gamma: <path d="M4 3v17h17M6 17C9 17 9 6 19 5" />,
   levels: <path d="M4 20V13h4v7m0 0V7h4v13m0 0V3h4v17m0 0V10h4v10M3 20h18" />,
   temperature: (
@@ -121,6 +127,7 @@ const icons: Record<IconName, ReactNode> = {
       <circle cx="12" cy="15" r="6" />
     </>
   ),
+  colorKey: <path d="m14 6 4 4M17 3l4 4a2 2 0 0 1 0 2.8l-2 2-7-7 2-2a2 2 0 0 1 3 0ZM13.5 6.5 5 15v4h4l8.5-8.5M3 21l2-2" />,
   focus: (
     <>
       <circle cx="12" cy="12" r="3" />
@@ -157,6 +164,7 @@ const icons: Record<IconName, ReactNode> = {
     </>
   ),
   edges: <path d="M3 20 8 4l4 11 4-7 5 12M3 3h3m12 0h3M3 3v3m18-3v3" />,
+  emboss: <path d="m12 3 9 5-9 5-9-5 9-5ZM3 12l9 5 9-5M3 16l9 5 9-5" />,
   opacity: (
     <>
       <path d="M12 3C9 7 5 11 5 15a7 7 0 0 0 14 0c0-4-4-8-7-12Z" />

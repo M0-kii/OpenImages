@@ -185,7 +185,9 @@ export default function App() {
       if (
         ["z", "y"].includes(e.key.toLowerCase()) &&
         e.target instanceof HTMLElement &&
-        e.target.closest("input, textarea, [contenteditable]")
+        e.target.closest(
+          'input:not([type="range"]), textarea, [contenteditable]:not([contenteditable="false"])',
+        )
       )
         return;
 
@@ -322,7 +324,6 @@ export default function App() {
                 tool={active as ToolId}
                 doc={doc}
                 edit={edit}
-                setEdit={history.set}
                 history={history}
                 onPickFile={pickFile}
                 onCloseDoc={closeDoc}

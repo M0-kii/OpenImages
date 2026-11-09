@@ -88,6 +88,9 @@ describe("searchTools", () => {
     ["outline", "Border"],
     ["bulk", "Batch Export"],
     ["resize all", "Batch Export"],
+    ["exposure", "Exposure"],
+    ["green screen", "Color Key"],
+    ["engrave", "Emboss"],
   ])("finds %s -> %s", (q, want) => {
     expect(top(q)).toBe(want);
   });

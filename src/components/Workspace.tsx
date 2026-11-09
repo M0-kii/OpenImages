@@ -20,10 +20,6 @@ interface Props {
   tool: ToolId;
   doc: DocMeta | null;
   edit: EditState;
-  setEdit: (
-    next: EditState | ((p: EditState) => EditState),
-    coalesceKey?: string,
-  ) => void;
   history: History<EditState>;
   onPickFile: () => Promise<void>;
   onCloseDoc: () => void;
@@ -53,7 +49,7 @@ export function Workspace(p: Props) {
   /** Each field name becomes its own coalesce group, so a slider drag is one undo step. */
   const patch = useCallback(
     (delta: Partial<EditState>) => {
-      p.setEdit((e) => ({ ...e, ...delta }), Object.keys(delta).join(","));
+      p.history.set((e) => ({ ...e, ...delta }), Object.keys(delta).join(","));
     },
     [p],
   );
@@ -130,7 +126,14 @@ export function Workspace(p: Props) {
   }
 
   return (
-    <div className="workspace">
+    <div
+      className="workspace"
+      onPointerDownCapture={p.history.endGroup}
+      onClickCapture={(event) => {
+        if (event.target instanceof Element && event.target.closest("button"))
+          p.history.endGroup();
+      }}
+    >
       <div className="workspace__canvas">
         <CanvasView
           url={url}
@@ -182,6 +185,7 @@ export function Workspace(p: Props) {
 
       <ExportBar
         doc={doc}
+        mayHaveTransparency={doc.hasAlpha || edit.colorKey !== null}
         formats={p.formats}
         format={p.format}
         setFormat={p.setFormat}
@@ -197,7 +201,7 @@ export function Workspace(p: Props) {
         onUndo={p.history.undo}
         onRedo={p.history.redo}
         onExport={p.onExport}
-        onReset={() => p.setEdit(INITIAL_EDIT)}
+        onReset={() => p.history.set(INITIAL_EDIT)}
         onOpen={pickFile}
         onCloseDoc={p.onCloseDoc}
       />

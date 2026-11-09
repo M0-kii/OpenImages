@@ -5,6 +5,7 @@ import { Select } from "./Select";
 
 interface Props {
   doc: DocMeta;
+  mayHaveTransparency: boolean;
   formats: OutputFormat[];
   format: OutputFormat;
   setFormat: (f: OutputFormat) => void;
@@ -51,7 +52,7 @@ export function ExportBar(p: Props) {
             </>
           )}
         </span>
-        {p.doc.hasAlpha && opaque && p.showFormat && (
+        {p.mayHaveTransparency && opaque && p.showFormat && (
           <span
             className="warn"
             title={`${p.format.toUpperCase()} has no alpha channel`}

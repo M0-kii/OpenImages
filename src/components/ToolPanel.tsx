@@ -13,7 +13,7 @@ import {
   type OutputFormat,
   type Swatch,
 } from "../lib/api";
-import type { Anchor, EditState, Operation, ResampleFilter } from "../lib/ops";
+import { rgb, type Anchor, type EditState, type Operation, type ResampleFilter } from "../lib/ops";
 import { useSettings } from "../state/settings";
 import type { ToolId } from "../tools/registry";
 
@@ -66,6 +66,7 @@ export function ToolPanel(p: PanelProps) {
     case "circle": return <CirclePanel {...p} />;
 
     case "adjust": return <AdjustPanel {...p} />;
+    case "exposure": return <ExposurePanel {...p} />;
     case "gamma": return <GammaPanel {...p} />;
     case "levels": return <LevelsPanel {...p} />;
     case "temperature": return <TemperaturePanel {...p} />;
@@ -75,6 +76,7 @@ export function ToolPanel(p: PanelProps) {
     case "posterize": return <PosterizePanel {...p} />;
     case "threshold": return <ThresholdPanel {...p} />;
     case "filter": return <FilterPanel {...p} />;
+    case "colorKey": return <ColorKeyPanel {...p} />;
 
     case "focus": return <FocusPanel {...p} />;
     case "vignette": return <VignettePanel {...p} />;
@@ -82,6 +84,7 @@ export function ToolPanel(p: PanelProps) {
     case "noise": return <NoisePanel {...p} />;
     case "shadow": return <ShadowPanel {...p} />;
     case "edges": return <EdgesPanel {...p} />;
+    case "emboss": return <EmbossPanel {...p} />;
     case "opacity": return <OpacityPanel {...p} />;
 
     case "convert": return <ConvertPanel {...p} />;
@@ -340,6 +343,23 @@ function AdjustPanel({ edit, patch }: PanelProps) {
   );
 }
 
+function ExposurePanel({ edit, patch }: PanelProps) {
+  return (
+    <Group title="Exposure">
+      <Slider
+        label="Exposure"
+        value={edit.exposure}
+        min={-4}
+        max={4}
+        step={0.1}
+        suffix=" EV"
+        onChange={(exposure) => patch({ exposure })}
+      />
+      <p className="note">Each stop doubles or halves the amount of light.</p>
+    </Group>
+  );
+}
+
 function GammaPanel({ edit, patch }: PanelProps) {
   return (
     <Group title="Gamma">
@@ -443,6 +463,38 @@ function FilterPanel({ edit, patch }: PanelProps) {
   );
 }
 
+function ColorKeyPanel({ edit, patch }: PanelProps) {
+  const key = edit.colorKey;
+  return (
+    <Group title="Color key">
+      <Toggle
+        label="Remove matching color"
+        on={key !== null}
+        onClick={() => patch({ colorKey: key ? null : { color: rgb(0, 255, 0), tolerance: 15 } })}
+      />
+      {key && (
+        <>
+          <ColorField
+            label="Color to remove"
+            value={key.color}
+            onChange={(color) => patch({ colorKey: { ...key, color } })}
+          />
+          <Slider
+            label="Tolerance"
+            value={key.tolerance}
+            min={0}
+            max={100}
+            suffix="%"
+            reset={15}
+            onChange={(tolerance) => patch({ colorKey: { ...key, tolerance } })}
+          />
+          <p className="note">Matches the source colors before color adjustments. Export as PNG or WebP to keep transparency.</p>
+        </>
+      )}
+    </Group>
+  );
+}
+
 // ── Effects ────────────────────────────────────────────────────────────
 
 function FocusPanel({ edit, patch }: PanelProps) {
@@ -521,6 +573,15 @@ function EdgesPanel({ edit, patch }: PanelProps) {
     <Group title="Edge detect">
       <Toggle label="Sobel outline" on={edit.edges} onClick={() => patch({ edges: !edit.edges })} />
       <p className="note">Replaces the image with the magnitude of its luma gradient. Flat areas go black; edges glow.</p>
+    </Group>
+  );
+}
+
+function EmbossPanel({ edit, patch }: PanelProps) {
+  return (
+    <Group title="Emboss">
+      <Slider label="Strength" value={edit.emboss} min={0} max={100} suffix="%" onChange={(emboss) => patch({ emboss })} />
+      <p className="note">Blends the image with a grayscale relief.</p>
     </Group>
   );
 }
@@ -747,8 +808,7 @@ function BatchPanel({ ops, format, quality }: PanelProps) {
           />
         </label>
         <p className="note">
-          Appended before the extension. Writing into the source folder with an empty suffix would
-          overwrite the originals, so those files are skipped.
+          Appended before the extension. Files with an existing destination are skipped.
         </p>
       </Group>
 

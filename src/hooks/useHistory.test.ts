@@ -66,6 +66,18 @@ describe("useHistory", () => {
     expect(result.current.present).toEqual({ n: 1 });
   });
 
+  it("does not merge a new gesture after an unchanged value", () => {
+    const { result } = renderHook(() => useHistory({ n: 0 }));
+    act(() => {
+      result.current.set({ n: 1 }, "brightness");
+      result.current.endGroup();
+      result.current.set({ n: 1 }, "brightness");
+      result.current.set({ n: 2 }, "brightness");
+      result.current.undo();
+    });
+    expect(result.current.present).toEqual({ n: 1 });
+  });
+
   it("starts a new entry after the coalesce window lapses", () => {
     const { result } = renderHook(() => useHistory({ n: 0 }));
     act(() => result.current.set({ n: 1 }, "brightness"));

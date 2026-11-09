@@ -2,6 +2,7 @@
 //! image. The UI builds the list, the backend runs it. Adding a new tool means
 //! adding a variant here and a panel in the UI — nothing else changes.
 
+use fast_image_resize::{FilterType as FastFilter, ResizeAlg, ResizeOptions, Resizer};
 use image::imageops::FilterType;
 use image::{DynamicImage, GenericImageView, Rgba, RgbaImage};
 use serde::{Deserialize, Serialize};
@@ -56,6 +57,18 @@ impl From<ResampleFilter> for FilterType {
             ResampleFilter::CatmullRom => FilterType::CatmullRom,
             ResampleFilter::Lanczos3 => FilterType::Lanczos3,
         }
+    }
+}
+
+impl From<ResampleFilter> for ResizeAlg {
+    fn from(filter: ResampleFilter) -> Self {
+        let filter = match filter {
+            ResampleFilter::Nearest => return Self::Nearest,
+            ResampleFilter::Triangle => FastFilter::Bilinear,
+            ResampleFilter::CatmullRom => FastFilter::CatmullRom,
+            ResampleFilter::Lanczos3 => FastFilter::Lanczos3,
+        };
+        Self::Convolution(filter)
     }
 }
 
@@ -120,6 +133,10 @@ pub enum Operation {
         width: f32,
         height: f32,
     },
+    ColorKey {
+        color: Color,
+        tolerance: u8,
+    },
     Resize {
         width: u32,
         height: u32,
@@ -153,6 +170,9 @@ pub enum Operation {
         contrast: f32,
         saturation: f32,
         hue: f32,
+    },
+    Exposure {
+        stops: f32,
     },
     /// `value` > 1 brightens midtones, < 1 darkens them.
     Gamma {
@@ -209,6 +229,9 @@ pub enum Operation {
     },
     /// Sobel magnitude on luma.
     EdgeDetect,
+    Emboss {
+        amount: f32,
+    },
     /// `amount`, `radius`, `softness` are all 0..100.
     Vignette {
         amount: f32,
@@ -331,10 +354,19 @@ fn apply(img: DynamicImage, op: &Operation, s: Scale) -> DynamicImage {
             filter,
         } => {
             let (w, h) = (s.px(width), s.px(height));
-            if w == 0 || h == 0 {
+            if w == 0 || h == 0 || (w, h) == img.dimensions() {
                 return img;
             }
-            img.resize_exact(w, h, filter.into())
+            let mut out = DynamicImage::new(w, h, img.color());
+            let options = ResizeOptions::new().resize_alg(filter.into());
+            if out.set_color_space(img.color_space()).is_ok()
+                && Resizer::new().resize(&img, &mut out, &options).is_ok()
+            {
+                out
+            } else {
+                drop(out);
+                img.resize_exact(w, h, filter.into())
+            }
         }
 
         Operation::Rotate { degrees } => match degrees % 360 {
@@ -389,6 +421,8 @@ fn apply(img: DynamicImage, op: &Operation, s: Scale) -> DynamicImage {
                 img
             }
         }
+
+        Operation::Exposure { stops } => exposure(img, stops),
 
         Operation::Gamma { value } => {
             if value <= 0.0 || (value - 1.0).abs() < f32::EPSILON {
@@ -529,11 +563,15 @@ fn apply(img: DynamicImage, op: &Operation, s: Scale) -> DynamicImage {
 
         Operation::EdgeDetect => edge_detect(img),
 
+        Operation::Emboss { amount } => emboss(img, amount),
+
         Operation::Vignette {
             amount,
             radius,
             softness,
         } => vignette(img, amount, radius, softness),
+
+        Operation::ColorKey { color, tolerance } => color_key(img, color, tolerance),
 
         Operation::Opacity { amount } => {
             let k = (amount / 100.0).clamp(0.0, 1.0);
@@ -587,6 +625,42 @@ fn clamp_u8(v: f32) -> u8 {
 fn luma(r: u8, g: u8, b: u8) -> u8 {
     // Rec. 709 coefficients, matching what `image` uses elsewhere.
     (0.2126 * r as f32 + 0.7152 * g as f32 + 0.0722 * b as f32).round() as u8
+}
+
+fn exposure(img: DynamicImage, stops: f32) -> DynamicImage {
+    if stops == 0.0 {
+        return img;
+    }
+    let gain = stops.clamp(-4.0, 4.0).exp2();
+    let lut: [u8; 256] = std::array::from_fn(|i| {
+        let srgb = i as f32 / 255.0;
+        let linear = if srgb <= 0.04045 {
+            srgb / 12.92
+        } else {
+            ((srgb + 0.055) / 1.055).powf(2.4)
+        } * gain;
+        let srgb = if linear <= 0.0031308 {
+            linear * 12.92
+        } else {
+            1.055 * linear.powf(1.0 / 2.4) - 0.055
+        };
+        clamp_u8(srgb * 255.0)
+    });
+    map_rgb(img, |channels| channels.map(|value| lut[value as usize]))
+}
+
+fn color_key(img: DynamicImage, color: Color, tolerance: u8) -> DynamicImage {
+    let distance = (u16::from(tolerance.min(100)) * 255 / 100) as u8;
+    let mut out = img.into_rgba8();
+    for px in out.pixels_mut() {
+        if px[0].abs_diff(color.r) <= distance
+            && px[1].abs_diff(color.g) <= distance
+            && px[2].abs_diff(color.b) <= distance
+        {
+            px[3] = 0;
+        }
+    }
+    DynamicImage::ImageRgba8(out)
 }
 
 /// Per-pixel RGB map that leaves alpha alone.
@@ -825,6 +899,29 @@ fn edge_detect(img: DynamicImage) -> DynamicImage {
     DynamicImage::ImageRgba8(out)
 }
 
+fn emboss(img: DynamicImage, amount: f32) -> DynamicImage {
+    if amount <= 0.0 {
+        return img;
+    }
+    let mix = (amount / 100.0).min(1.0);
+    let src = img.into_rgba8();
+    let (w, h) = src.dimensions();
+    let out = RgbaImage::from_fn(w, h, |x, y| {
+        let [r, g, b, a] = src.get_pixel(x, y).0;
+        let center = luma(r, g, b) as f32;
+        let sample = |x, y| {
+            let [r, g, b, a] = src.get_pixel(x, y).0;
+            center + (luma(r, g, b) as f32 - center) * (a as f32 / 255.0)
+        };
+        let lit = sample(x.saturating_sub(1), y.saturating_sub(1));
+        let shade = sample((x + 1).min(w - 1), (y + 1).min(h - 1));
+        let relief = (128.0 + lit - shade).clamp(0.0, 255.0);
+        let blend = |channel: u8| clamp_u8(channel as f32 * (1.0 - mix) + relief * mix);
+        Rgba([blend(r), blend(g), blend(b), a])
+    });
+    DynamicImage::ImageRgba8(out)
+}
+
 fn vignette(img: DynamicImage, amount: f32, radius: f32, softness: f32) -> DynamicImage {
     if amount <= 0.0 {
         return img;
@@ -970,6 +1067,40 @@ mod tests {
     }
 
     // ── Geometry ────────────────────────────────────────────────────────
+
+    #[test]
+    fn resize_preserves_bit_depth_and_resamples_transparent_edges() {
+        let red = Rgba([65535u16, 0, 0, 65535]);
+        let transparent_blue = Rgba([0u16, 0, 65535, 0]);
+        let mut src = DynamicImage::ImageRgba16(image::ImageBuffer::from_fn(2, 1, |x, _| {
+            if x == 0 { red } else { transparent_blue }
+        }));
+        let color_space = image::metadata::Cicp::DISPLAY_P3;
+        src.set_color_space(color_space).unwrap();
+
+        for filter in [
+            ResampleFilter::Triangle,
+            ResampleFilter::CatmullRom,
+            ResampleFilter::Lanczos3,
+        ] {
+            let resized = one(src.clone(), Operation::Resize { width: 1, height: 1, filter });
+            assert_eq!(resized.dimensions(), (1, 1));
+            assert_eq!(resized.color_space(), color_space);
+            let [r, g, b, a] = resized.as_rgba16().unwrap().get_pixel(0, 0).0;
+            assert!(r >= 65534 && g == 0 && b == 0, "{filter:?} leaked hidden color");
+            assert!(a.abs_diff(32768) <= 1, "{filter:?} lost half coverage: {a}");
+        }
+
+        let nearest = one(src, Operation::Resize {
+            width: 4,
+            height: 1,
+            filter: ResampleFilter::Nearest,
+        });
+        assert_eq!(
+            nearest.as_rgba16().unwrap().pixels().copied().collect::<Vec<_>>(),
+            [red, red, transparent_blue, transparent_blue],
+        );
+    }
 
     #[test]
     fn crop_is_resolution_independent() {
@@ -1168,6 +1299,30 @@ mod tests {
     }
 
     #[test]
+    fn exposure_scales_linear_light_and_preserves_alpha() {
+        let source = solid(1, 1, [64, 128, 240, 77]);
+        let brighter = one(source.clone(), Operation::Exposure { stops: 1.0 });
+        let darker = one(source, Operation::Exposure { stops: -1.0 });
+        assert_eq!(at(&brighter, 0, 0), [90, 176, 255, 77]);
+        assert_eq!(at(&darker, 0, 0), [44, 92, 176, 77]);
+    }
+
+    #[test]
+    fn color_key_matches_within_tolerance_without_raising_alpha() {
+        let key = Color { r: 0, g: 255, b: 0, a: 255 };
+        let pixels = vec![0, 255, 0, 255, 38, 220, 3, 127, 39, 220, 3, 60, 255, 0, 0, 0];
+        let source = DynamicImage::ImageRgba8(RgbaImage::from_raw(4, 1, pixels).unwrap());
+        let exact = one(source.clone(), Operation::ColorKey { color: key, tolerance: 0 });
+        assert_eq!(at(&exact, 0, 0)[3], 0);
+        assert_eq!(at(&exact, 1, 0)[3], 127);
+
+        let wide = one(source, Operation::ColorKey { color: key, tolerance: 15 });
+        assert_eq!(at(&wide, 1, 0)[3], 0);
+        assert_eq!(at(&wide, 2, 0), [39, 220, 3, 60]);
+        assert_eq!(at(&wide, 3, 0)[3], 0);
+    }
+
+    #[test]
     fn gamma_of_one_is_identity_and_higher_brightens() {
         let img = solid(2, 2, [128, 128, 128, 255]);
         assert_eq!(at(&one(img.clone(), Operation::Gamma { value: 1.0 }), 0, 0), [128, 128, 128, 255]);
@@ -1312,6 +1467,18 @@ mod tests {
             Operation::Noise { amount: 100.0, monochrome: false, seed: 1 },
         );
         assert_eq!(at(&out, 2, 2)[3], 40);
+    }
+
+    #[test]
+    fn emboss_shades_a_seam_and_keeps_alpha() {
+        let source = RgbaImage::from_fn(4, 2, |x, _| {
+            let v = if x < 2 { 32 } else { 112 };
+            Rgba([v, v, v, 128])
+        });
+        let out = one(DynamicImage::ImageRgba8(source), Operation::Emboss { amount: 100.0 });
+        assert_eq!(out.dimensions(), (4, 2));
+        assert_eq!(at(&out, 0, 0), [128, 128, 128, 128]);
+        assert_eq!(at(&out, 1, 0), [88, 88, 88, 128]);
     }
 
     #[test]

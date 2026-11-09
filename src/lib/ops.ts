@@ -14,12 +14,14 @@ export interface Color {
 
 export type Operation =
   | { kind: "crop"; x: number; y: number; width: number; height: number }
+  | { kind: "colorKey"; color: Color; tolerance: number }
   | { kind: "resize"; width: number; height: number; filter: ResampleFilter }
   | { kind: "rotate"; degrees: number }
   | { kind: "flip"; horizontal: boolean; vertical: boolean }
   | { kind: "pad"; width: number; height: number; color: Color; anchor: Anchor }
   | { kind: "border"; width: number; color: Color }
   | { kind: "adjust"; brightness: number; contrast: number; saturation: number; hue: number }
+  | { kind: "exposure"; stops: number }
   | { kind: "gamma"; value: number }
   | { kind: "levels"; black: number; white: number }
   | { kind: "temperature"; temp: number; tint: number }
@@ -35,6 +37,7 @@ export type Operation =
   | { kind: "pixelate"; size: number }
   | { kind: "noise"; amount: number; monochrome: boolean; seed: number }
   | { kind: "edgeDetect" }
+  | { kind: "emboss"; amount: number }
   | { kind: "vignette"; amount: number; radius: number; softness: number }
   | { kind: "opacity"; amount: number }
   | { kind: "roundCorners"; radius: number }
@@ -87,6 +90,7 @@ export interface EditState {
   contrast: number;
   saturation: number;
   hue: number;
+  exposure: number;
   gamma: number;
   levels: { black: number; white: number };
   temperature: { temp: number; tint: number };
@@ -104,9 +108,11 @@ export interface EditState {
   pixelate: number;
   noise: { amount: number; monochrome: boolean; seed: number };
   edges: boolean;
+  emboss: number;
   vignette: { amount: number; radius: number; softness: number };
 
   // Alpha & framing
+  colorKey: { color: Color; tolerance: number } | null;
   opacity: number;
   round: number;
   circle: boolean;
@@ -126,6 +132,7 @@ export const INITIAL_EDIT: EditState = {
   contrast: 0,
   saturation: 0,
   hue: 0,
+  exposure: 0,
   gamma: 1,
   levels: { black: 0, white: 255 },
   temperature: { temp: 0, tint: 0 },
@@ -142,8 +149,10 @@ export const INITIAL_EDIT: EditState = {
   pixelate: 0,
   noise: { amount: 0, monochrome: false, seed: 1 },
   edges: false,
+  emboss: 0,
   vignette: { amount: 0, radius: 60, softness: 45 },
 
+  colorKey: null,
   opacity: 100,
   round: 0,
   circle: false,
@@ -161,6 +170,7 @@ export function isDirty(e: EditState): boolean {
  * crop rectangle on the rotated preview — its normalized coordinates are only
  * meaningful in that post-rotation space. Swapping those two silently crops the
  * wrong region.
+ * Color key runs before resize and tone so it can match the source colors.
  *
  * Then tone, then effects. Blur, sharpen and vignette come after resize because
  * their radii are in *output* pixels: a 2px blur should look like 2px in the
@@ -176,10 +186,12 @@ export function buildOps(e: EditState): Operation[] {
   if (e.rotate % 360 !== 0) ops.push({ kind: "rotate", degrees: e.rotate % 360 });
   if (e.flipH || e.flipV) ops.push({ kind: "flip", horizontal: e.flipH, vertical: e.flipV });
   if (e.crop) ops.push({ kind: "crop", ...e.crop });
+  if (e.colorKey) ops.push({ kind: "colorKey", ...e.colorKey });
   if (e.resize) ops.push({ kind: "resize", ...e.resize });
   if (e.pad) ops.push({ kind: "pad", ...e.pad });
 
   if (e.autoContrast) ops.push({ kind: "autoContrast" });
+  if (e.exposure) ops.push({ kind: "exposure", stops: e.exposure });
   if (e.levels.black !== 0 || e.levels.white !== 255) ops.push({ kind: "levels", ...e.levels });
   if (e.gamma !== 1) ops.push({ kind: "gamma", value: e.gamma });
   if (e.brightness || e.contrast || e.saturation || e.hue) {
@@ -200,6 +212,7 @@ export function buildOps(e: EditState): Operation[] {
   if (e.invert) ops.push({ kind: "invert" });
 
   if (e.edges) ops.push({ kind: "edgeDetect" });
+  if (e.emboss > 0) ops.push({ kind: "emboss", amount: e.emboss });
   if (e.pixelate > 1) ops.push({ kind: "pixelate", size: e.pixelate });
   if (e.noise.amount > 0) ops.push({ kind: "noise", ...e.noise });
   if (e.blur > 0) ops.push({ kind: "blur", sigma: e.blur });
