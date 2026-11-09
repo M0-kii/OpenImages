@@ -65,21 +65,38 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-it("toggles and saves the appearance from the title bar", async () => {
+it("keeps tabs in the title bar and exposes appearance choices through the expanding menu", async () => {
   render(
     <SettingsProvider>
       <App />
     </SettingsProvider>,
   );
+  expect(screen.getByRole("tablist").closest("header")).toBeTruthy();
+  expect(screen.queryByRole("menubar")).toBeNull();
+  expect(screen.queryByRole("button", { name: "Settings" })).toBeNull();
+  expect(
+    screen.queryByRole("button", { name: /Switch to .* theme/ }),
+  ).toBeNull();
   fireEvent.click(
-    screen.getByRole("button", { name: "Switch to light theme" }),
+    screen.getByRole("button", { name: "Show application menu" }),
+  );
+  fireEvent.click(screen.getByRole("menuitem", { name: "View" }));
+  fireEvent.click(
+    screen.getByRole("menuitemcheckbox", { name: "Light appearance" }),
   );
   expect(document.documentElement.dataset.theme).toBe("light");
   expect(JSON.parse(localStorage.getItem("openimages.settings")!).theme).toBe(
     "light",
   );
-  fireEvent.click(screen.getByRole("button", { name: "Switch to dark theme" }));
+  fireEvent.click(screen.getByRole("menuitem", { name: "View" }));
+  fireEvent.click(
+    screen.getByRole("menuitemcheckbox", { name: "Dark appearance" }),
+  );
   expect(document.documentElement.dataset.theme).toBe("dark");
+  fireEvent.click(
+    screen.getByRole("button", { name: "Hide application menu" }),
+  );
+  expect(screen.queryByRole("menubar")).toBeNull();
   expect(screen.queryByText("On your device.")).toBeNull();
   await waitFor(() => expect(mocks.win.isMaximized).toHaveBeenCalled());
 });
@@ -92,6 +109,9 @@ it("opens and exports from the menubar while the sidebar remains available", asy
     <SettingsProvider>
       <App />
     </SettingsProvider>,
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: "Show application menu" }),
   );
   fireEvent.click(screen.getByRole("menuitem", { name: "File" }));
   expect(
@@ -132,7 +152,7 @@ it("keeps background commands from acting through Settings", async () => {
   );
   fireEvent.click(screen.getByRole("button", { name: "Open image" }));
   await screen.findByRole("heading", { name: "Crop" });
-  fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+  fireEvent.click(screen.getByRole("button", { name: /^Settings/ }));
   const close = screen.getByRole("button", { name: "Close settings" });
   fireEvent.keyDown(close, { key: "w", ctrlKey: true });
   fireEvent.keyDown(close, { key: "o", ctrlKey: true });

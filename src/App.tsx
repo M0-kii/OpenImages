@@ -7,9 +7,9 @@ import { SettingsModal } from "./components/SettingsModal";
 import { TitleBar } from "./components/TitleBar";
 import { Workspace } from "./components/Workspace";
 import { Sidebar } from "./components/Sidebar";
-import { TabStrip } from "./components/TabStrip";
 import { ContextMenu, type MenuItem } from "./components/Menu";
 import { useHistory } from "./hooks/useHistory";
+import { useShellGuards } from "./hooks/useShellGuards";
 import {
   closeImage,
   exportImage,
@@ -28,6 +28,7 @@ const HOME = "home";
 const DEFAULT_DROP_TOOL: ToolId = "crop";
 
 export default function App() {
+  useShellGuards();
   const { settings, set } = useSettings();
 
   // One document and one edit pipeline, shared by every tab. Tabs are *views*
@@ -294,8 +295,12 @@ export default function App() {
       <div className={`app ${dropping ? "is-dropping" : ""}`}>
         <TitleBar
           onHome={() => setActive(HOME)}
-          onSettings={() => setShowSettings(true)}
           menus={menus}
+          tabs={tabs}
+          activeId={active}
+          onSelect={setActive}
+          onClose={closeTab}
+          reduceMotion={settings.reduceMotion}
         />
 
         <Sidebar
@@ -304,12 +309,6 @@ export default function App() {
           onSettings={() => setShowSettings(true)}
         />
         <div className="foreground">
-          <TabStrip
-            tabs={tabs}
-            activeId={active}
-            onSelect={setActive}
-            onClose={closeTab}
-          />
           <main className="stagearea" key={active}>
             {active === HOME ? (
               <Home
