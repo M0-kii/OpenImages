@@ -123,19 +123,10 @@ export function SettingsModal({
                       <span
                         className={`settings-theme__preview settings-theme__preview--${theme}`}
                         aria-hidden="true"
-                      >
-                        <i />
-                        <span>
-                          <b />
-                          <b />
-                          <b />
-                        </span>
-                      </span>
-                      <span className="settings-theme__label">
-                        {label}
-                        <span aria-hidden="true">
-                          {settings.theme === theme ? "✓" : ""}
-                        </span>
+                      />
+                      {label}
+                      <span className="settings-theme__check" aria-hidden="true">
+                        {settings.theme === theme ? "✓" : ""}
                       </span>
                     </button>
                   ))}
@@ -146,20 +137,18 @@ export function SettingsModal({
                 aria-labelledby="settings-interface-heading"
               >
                 <h3 id="settings-interface-heading">Interface</h3>
-                <div className="settings-card">
-                  <Toggle
-                    label="Film grain"
-                    hint="Add a subtle texture to the interface."
-                    value={settings.grain}
-                    onChange={(value) => set("grain", value)}
-                  />
-                  <Toggle
-                    label="Reduce motion"
-                    hint="Keep menus and controls still."
-                    value={settings.reduceMotion}
-                    onChange={(value) => set("reduceMotion", value)}
-                  />
-                </div>
+                <Toggle
+                  label="Film grain"
+                  hint="Add a subtle texture to the interface."
+                  value={settings.grain}
+                  onChange={(value) => set("grain", value)}
+                />
+                <Toggle
+                  label="Reduce motion"
+                  hint="Keep menus and controls still."
+                  value={settings.reduceMotion}
+                  onChange={(value) => set("reduceMotion", value)}
+                />
               </section>
             </>
           )}
@@ -174,23 +163,24 @@ export function SettingsModal({
                 aria-labelledby="settings-preview-heading"
               >
                 <h3 id="settings-preview-heading">Preview</h3>
-                <div className="settings-card">
-                  <Toggle
-                    label="Transparency checkerboard"
-                    hint="Distinguish transparent pixels from the image."
-                    value={settings.checkerboard}
-                    onChange={(value) => set("checkerboard", value)}
-                  />
-                </div>
-                <div className="settings-preview-example" aria-hidden="true">
-                  <span className={settings.checkerboard ? "is-checkered" : ""}>
-                    <ToolIcon name="image" size={34} />
+                <Toggle
+                  label="Transparency checkerboard"
+                  hint="Distinguish transparent pixels from the image."
+                  value={settings.checkerboard}
+                  onChange={(value) => set("checkerboard", value)}
+                />
+                <div className="settings-preview-example">
+                  <span
+                    className={settings.checkerboard ? "is-checkered" : ""}
+                    aria-hidden="true"
+                  >
+                    <ToolIcon name="image" size={26} />
                   </span>
+                  <p className="settings-hint">
+                    Previews use a smaller copy for responsive editing. Exports
+                    use your full-resolution source.
+                  </p>
                 </div>
-                <p className="settings-hint">
-                  Previews use a smaller copy for responsive editing. Exports
-                  use your full-resolution source.
-                </p>
               </section>
             </>
           )}
@@ -205,48 +195,43 @@ export function SettingsModal({
                 aria-labelledby="settings-output-heading"
               >
                 <h3 id="settings-output-heading">Image output</h3>
-                <div className="settings-card">
-                  <div className="settings-field settings-field--inline">
-                    <label htmlFor="default-format">Default format</label>
-                    <Select
-                      id="default-format"
-                      aria-label="Default format"
-                      value={settings.defaultFormat}
-                      onChange={(value) =>
-                        set("defaultFormat", value as OutputFormat)
-                      }
-                      options={formats.map(
-                        (format) => [format.toUpperCase(), format] as const,
-                      )}
-                    />
+                <div className="settings-field settings-field--inline">
+                  <label htmlFor="default-format">Default format</label>
+                  <Select
+                    id="default-format"
+                    aria-label="Default format"
+                    value={settings.defaultFormat}
+                    onChange={(value) =>
+                      set("defaultFormat", value as OutputFormat)
+                    }
+                    options={formats.map(
+                      (format) => [format.toUpperCase(), format] as const,
+                    )}
+                  />
+                </div>
+                <div className="settings-field">
+                  <div className="settings-field__head">
+                    <label htmlFor="default-quality">Default JPEG quality</label>
+                    <output htmlFor="default-quality">
+                      {settings.defaultQuality}%
+                    </output>
                   </div>
-                  <div className="settings-field">
-                    <div className="settings-field__head">
-                      <label htmlFor="default-quality">
-                        Default JPEG quality
-                      </label>
-                      <output htmlFor="default-quality">
-                        {settings.defaultQuality}%
-                      </output>
-                    </div>
-                    <input
-                      id="default-quality"
-                      type="range"
-                      min={1}
-                      max={100}
-                      value={settings.defaultQuality}
-                      style={{
-                        ["--pct" as string]: `${settings.defaultQuality}%`,
-                      }}
-                      onChange={(event) =>
-                        set("defaultQuality", Number(event.target.value))
-                      }
-                    />
-                    <p className="settings-hint">
-                      Higher quality keeps more detail and produces larger
-                      files.
-                    </p>
-                  </div>
+                  <input
+                    id="default-quality"
+                    type="range"
+                    min={1}
+                    max={100}
+                    value={settings.defaultQuality}
+                    style={{
+                      ["--pct" as string]: `${settings.defaultQuality}%`,
+                    }}
+                    onChange={(event) =>
+                      set("defaultQuality", Number(event.target.value))
+                    }
+                  />
+                  <p className="settings-hint">
+                    Higher quality keeps more detail and produces larger files.
+                  </p>
                 </div>
               </section>
               <section
@@ -254,18 +239,15 @@ export function SettingsModal({
                 aria-labelledby="settings-transparency-heading"
               >
                 <h3 id="settings-transparency-heading">Transparency</h3>
-                <div className="settings-card">
-                  <div className="settings-field">
-                    <ColorField
-                      label="Matte for opaque formats"
-                      value={settings.matte}
-                      onChange={(value) => set("matte", value)}
-                    />
-                    <p className="settings-hint">
-                      JPEG replaces transparent pixels with this background
-                      color.
-                    </p>
-                  </div>
+                <div className="settings-field">
+                  <ColorField
+                    label="Matte for opaque formats"
+                    value={settings.matte}
+                    onChange={(value) => set("matte", value)}
+                  />
+                  <p className="settings-hint">
+                    JPEG replaces transparent pixels with this background color.
+                  </p>
                 </div>
               </section>
             </>
@@ -310,7 +292,7 @@ export function SettingsModal({
                   <dt>Available tools</dt>
                   <dd>{TOOLS.length}</dd>
                 </div>
-                <div className="settings-about__wide">
+                <div>
                   <dt>Repository</dt>
                   <dd>
                     <a href={REPOSITORY} onClick={openLink}>
@@ -319,7 +301,7 @@ export function SettingsModal({
                     </a>
                   </dd>
                 </div>
-                <div className="settings-about__wide">
+                <div>
                   <dt>Export formats</dt>
                   <dd>
                     {formats.map((format) => format.toUpperCase()).join(" · ")}

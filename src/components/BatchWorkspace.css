@@ -1,7 +1,6 @@
 .batch-queue {
   display: flex;
   flex-direction: column;
-  background: var(--surface);
 }
 
 .batch-toolbar {
@@ -30,7 +29,7 @@
 }
 
 .batch-empty svg {
-  color: var(--output);
+  color: var(--em);
 }
 
 .batch-empty strong {
@@ -54,7 +53,7 @@
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  padding: 12px 16px;
+  padding: 12px 20px;
   border-bottom: 1px solid var(--line-soft);
 }
 
@@ -78,23 +77,19 @@
 }
 
 .batch-file__status {
-  margin-top: 4px;
-  padding: 4px 8px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
+  align-self: center;
   font-size: 11px;
   color: var(--ink-dim);
 }
 
 .batch-file__status--writing,
 .batch-file__status--written {
-  background: var(--em-soft);
   color: var(--em);
 }
 
 .batch-file__status--failed {
-  border-color: var(--control-line);
   color: var(--ink);
+  font-weight: 600;
 }
 
 .batch-field {

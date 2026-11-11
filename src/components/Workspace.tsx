@@ -138,12 +138,9 @@ export function Workspace(p: Props) {
     return (
       <div className="workspace workspace--empty">
         <div className="placeholder">
-          <span
-            className={`placeholder__glyph tool-card__icon--${tool.category}`}
-          >
+          <span className="placeholder__glyph">
             <ToolIcon name={toolId} size={32} />
           </span>
-          <span className="placeholder__category">{tool.category}</span>
           <h1>{tool.name}</h1>
           <p>{tool.blurb}</p>
           <button className="btn btn--primary btn--lg" onClick={pickFile}>
@@ -193,7 +190,7 @@ export function Workspace(p: Props) {
 
       <aside className="panel">
         <header className="panel__head">
-          <span className={`panel__icon tool-card__icon--${tool.category}`}>
+          <span className="panel__icon">
             <ToolIcon name={toolId} size={22} />
           </span>
           <div>

@@ -31,6 +31,16 @@ export function Home({
   );
   const currentCategory = CATEGORIES.find((c) => c.id === category);
   const searching = query.trim().length > 0;
+  const title = searching
+    ? "Search results"
+    : (currentCategory?.name ?? "All tools");
+  const groups =
+    category === "all" && !searching
+      ? CATEGORIES.map(({ id, name }) => ({
+          name,
+          tools: results.filter((tool) => tool.category === id),
+        }))
+      : [{ name: null, tools: results }];
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -54,174 +64,105 @@ export function Home({
 
   return (
     <div className="home">
-      <div className="library-main">
-        <header className="library-toolbar">
-          <div className="library-toolbar__location">
-            <ToolIcon name="all" size={18} />
-            <span>Workspace</span>
-            <ToolIcon name="chevron" size={12} />
-            <strong>{currentCategory?.name ?? "All tools"}</strong>
-          </div>
-          <button className="btn btn--primary" onClick={onPickFile}>
-            <ToolIcon name="upload" size={16} />
-            Open image
-          </button>
-        </header>
-
-        <div className="library-scroll">
-          <div className="home__inner">
-            <section className="welcome" aria-labelledby="welcome-title">
-              <div className="welcome__copy">
-                <span className="welcome__eyebrow">
-                  A little space to create
-                </span>
-                <h1 id="welcome-title">
-                  Small edits.
-                  <br />
-                  <span>Beautiful possibilities.</span>
-                </h1>
-                <p>
-                  Crop, fine-tune, and make it your own.
-                  <br />
-                  Everything your image needs, right here.
-                </p>
-                <button
-                  className="btn btn--primary btn--lg"
-                  onClick={onPickFile}
-                >
-                  <ToolIcon name="image" size={18} />
-                  Open an image
-                </button>
-                <span className="welcome__hint">
-                  or drop one anywhere <span>·</span> <kbd>Ctrl O</kbd>
-                </span>
-              </div>
-              <div className="welcome__art" aria-hidden="true">
-                <div className="image-sheet image-sheet--back" />
-                <div className="image-sheet image-sheet--middle" />
-                <div className="image-sheet image-sheet--front">
-                  <div className="image-sheet__scene">
-                    <span className="image-sheet__sun" />
-                    <span className="image-sheet__hill image-sheet__hill--back" />
-                    <span className="image-sheet__hill" />
-                  </div>
-                  <div className="image-sheet__crop">
-                    <i />
-                    <i />
-                    <i />
-                    <i />
-                  </div>
-                </div>
-                <span className="welcome__art-icon">
-                  <ToolIcon name="crop" size={25} />
-                </span>
-              </div>
-            </section>
-
-            <section
-              className="tool-library"
-              aria-labelledby="tool-library-title"
-            >
-              <div className="library-heading">
-                <div>
-                  <h2 id="tool-library-title">
-                    {searching
-                      ? "Search results"
-                      : (currentCategory?.name ?? "Your toolkit")}
-                    <span>{results.length}</span>
-                  </h2>
-                  <p>
-                    {searching
-                      ? `Tools matching “${query.trim()}”`
-                      : (currentCategory?.blurb ??
-                        "Find the right tool for the finishing touch.")}
-                  </p>
-                </div>
-                <div className="search">
-                  <ToolIcon name="search" size={18} />
-                  <label className="sr-only" htmlFor="tool-search">
-                    Search tools
-                  </label>
-                  <input
-                    id="tool-search"
-                    ref={inputRef}
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && results[0])
-                        onOpen(results[0].id);
-                      if (e.key === "Escape") setQuery("");
-                    }}
-                    placeholder="Search tools…"
-                    spellCheck={false}
-                  />
-                  {query ? (
-                    <button
-                      className="search__clear"
-                      onClick={() => {
-                        setQuery("");
-                        inputRef.current?.focus();
-                      }}
-                      aria-label="Clear search"
-                    >
-                      <ToolIcon name="close" size={15} />
-                    </button>
-                  ) : (
-                    <kbd>/</kbd>
-                  )}
-                </div>
-              </div>
-
-              {results.length ? (
-                <div className="tool-grid">
-                  {results.map((tool) => (
-                    <button
-                      key={tool.id}
-                      className="tool-card"
-                      onClick={() => onOpen(tool.id)}
-                    >
-                      <span
-                        className={`tool-card__icon tool-card__icon--${tool.category}`}
-                      >
-                        <ToolIcon name={tool.id} size={25} />
-                      </span>
-                      <span className="tool-card__name">{tool.name}</span>
-                      <span className="tool-card__blurb">{tool.blurb}</span>
-                      <span className="tool-card__category">
-                        {CATEGORIES.find((c) => c.id === tool.category)?.name}
-                      </span>
-                      <span className="tool-card__go">
-                        <ToolIcon name="chevron" size={15} />
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <div className="home__empty" role="status">
-                  <ToolIcon name="search" size={30} />
-                  <h3>No tools found</h3>
-                  <p>
-                    Try another search
-                    {currentCategory
-                      ? " or look in all tools"
-                      : ", like crop or convert"}
-                    .
-                  </p>
-                  <button
-                    className="btn"
-                    onClick={() => {
-                      setQuery("");
-                      onCategoryChange("all");
-                    }}
-                  >
-                    Show all tools
-                  </button>
-                </div>
-              )}
-            </section>
-          </div>
+      <header className="library-toolbar">
+        <div className="library-title">
+          <h1 id="tool-library-title">{title}</h1>
+          <p>
+            {results.length} {results.length === 1 ? "tool" : "tools"}
+          </p>
         </div>
-      </div>
+        <div className="search">
+          <ToolIcon name="search" size={17} />
+          <label className="sr-only" htmlFor="tool-search">
+            Search tools
+          </label>
+          <input
+            id="tool-search"
+            ref={inputRef}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && results[0]) onOpen(results[0].id);
+              if (e.key === "Escape") setQuery("");
+            }}
+            placeholder="Search tools…"
+            spellCheck={false}
+          />
+          {query ? (
+            <button
+              className="search__clear"
+              onClick={() => {
+                setQuery("");
+                inputRef.current?.focus();
+              }}
+              aria-label="Clear search"
+            >
+              <ToolIcon name="close" size={15} />
+            </button>
+          ) : (
+            <kbd>/</kbd>
+          )}
+        </div>
+        <button
+          className="btn btn--primary"
+          onClick={onPickFile}
+          title="Open image (Ctrl+O)"
+        >
+          <ToolIcon name="upload" size={16} />
+          Open image
+        </button>
+      </header>
+
+      <section className="library-scroll" aria-labelledby="tool-library-title">
+        {results.length ? (
+          groups.map(({ name, tools }) => (
+            <div className="tool-group" key={name ?? "results"}>
+              {name && <h2>{name}</h2>}
+              <ul className="tool-list" role="list" aria-label={name ?? title}>
+                {tools.map((tool) => (
+                  <li key={tool.id}>
+                    <button className="tool-row" onClick={() => onOpen(tool.id)}>
+                      <span className="tool-row__icon">
+                        <ToolIcon name={tool.id} size={21} />
+                      </span>
+                      <span className="tool-row__copy">
+                        <span className="tool-row__name">{tool.name}</span>
+                        <span className="tool-row__blurb">{tool.blurb}</span>
+                      </span>
+                      <span className="tool-row__go">
+                        <ToolIcon name="chevron" size={14} />
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))
+        ) : (
+          <div className="home__empty">
+            <div role="status">
+              <h2>No tools found</h2>
+              <p>
+                Try another search
+                {currentCategory
+                  ? " or look in all tools"
+                  : ", like crop or convert"}
+                .
+              </p>
+            </div>
+            <button
+              className="btn"
+              onClick={() => {
+                setQuery("");
+                onCategoryChange("all");
+                inputRef.current?.focus();
+              }}
+            >
+              Show all tools
+            </button>
+          </div>
+        )}
+      </section>
     </div>
   );
 }

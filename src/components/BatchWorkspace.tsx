@@ -44,7 +44,7 @@ export function BatchWorkspace({ batch, formats, doc, edit }: Props) {
     <div className="workspace batch-workspace">
       <section className="workspace__canvas batch-queue" aria-labelledby="batch-title">
         <header className="panel__head">
-          <span className="panel__icon tool-card__icon--output">
+          <span className="panel__icon">
             <ToolIcon name="batch" size={22} />
           </span>
           <div>

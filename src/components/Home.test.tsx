@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { Home } from "./Home";
 import { Sidebar } from "./Sidebar";
@@ -32,39 +32,37 @@ function setup() {
 }
 
 it("combines category and ranked search, and opens the displayed first result", () => {
-  const { onOpen, container } = setup();
+  const { onOpen } = setup();
   fireEvent.click(screen.getByRole("button", { name: /^Output/ }));
-  expect(container.querySelectorAll(".tool-card")).toHaveLength(
+  expect(screen.getAllByRole("listitem")).toHaveLength(
     TOOLS.filter((t) => t.category === "output").length,
   );
   expect(screen.queryByRole("button", { name: /^Crop / })).toBeNull();
 
   const search = screen.getByRole("textbox", { name: "Search tools" });
   fireEvent.change(search, { target: { value: "icon" } });
-  expect(container.querySelector(".tool-card__name")?.textContent).toBe(
-    "Favicon Set",
-  );
+  const results = within(screen.getByRole("list", { name: "Search results" }));
+  expect(results.getAllByRole("button")[0].textContent).toContain("Favicon Set");
   fireEvent.keyDown(search, { key: "Enter" });
   expect(onOpen).toHaveBeenCalledWith("favicon");
 });
 
 it("recovers from an empty category search by clearing both filters", () => {
-  const { container } = setup();
+  setup();
   fireEvent.click(screen.getByRole("button", { name: /^Effects/ }));
   fireEvent.change(screen.getByRole("textbox"), {
     target: { value: "favicon" },
   });
   expect(screen.getByRole("status").textContent).toContain("No tools found");
   fireEvent.click(screen.getByRole("button", { name: "Show all tools" }));
-  expect(container.querySelectorAll(".tool-card")).toHaveLength(TOOLS.length);
+  expect(screen.getAllByRole("listitem")).toHaveLength(TOOLS.length);
   expect((screen.getByRole("textbox") as HTMLInputElement).value).toBe("");
 });
 
 it("opens images and settings from the library controls", () => {
   const { onPickFile, onSettings } = setup();
-  fireEvent.click(screen.getByRole("button", { name: "Open an image" }));
   fireEvent.click(screen.getByRole("button", { name: "Open image" }));
-  expect(onPickFile).toHaveBeenCalledTimes(2);
+  expect(onPickFile).toHaveBeenCalledOnce();
   fireEvent.click(screen.getByRole("button", { name: /Settings/ }));
   expect(onSettings).toHaveBeenCalledOnce();
   expect(screen.queryByText("On your device.")).toBeNull();
