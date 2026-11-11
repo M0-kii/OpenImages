@@ -13,44 +13,44 @@ interface Preview {
  * drag doesn't queue one render per pixel of mouse travel.
  */
 export function usePreview(id: number | null, ops: Operation[], debounceMs = 70): Preview {
-  const [url, setUrl] = useState<string | null>(null);
+  const [frame, setFrame] = useState<{ id: number; url: string } | null>(null);
   const [rendering, setRendering] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Renders are async and can land out of order — a cheap grayscale toggle may
-  // finish before the heavy blur queued ahead of it. Only the newest wins.
-  const latest = useRef(0);
   const objectUrl = useRef<string | null>(null);
   const serialized = JSON.stringify(ops);
 
   useEffect(() => {
+    setError(null);
+    setRendering(id !== null);
     if (id === null) {
-      setUrl(null);
+      setFrame(null);
       return;
     }
 
-    const seq = ++latest.current;
-    setRendering(true);
+    let current = true;
 
     const timer = setTimeout(async () => {
       try {
         const blob = await renderPreview(id, JSON.parse(serialized) as Operation[]);
-        if (seq !== latest.current) return;
+        if (!current) return;
 
         const next = URL.createObjectURL(blob);
         if (objectUrl.current) URL.revokeObjectURL(objectUrl.current);
         objectUrl.current = next;
 
-        setUrl(next);
-        setError(null);
+        setFrame({ id, url: next });
       } catch (e) {
-        if (seq === latest.current) setError(String(e));
+        if (current) setError(String(e));
       } finally {
-        if (seq === latest.current) setRendering(false);
+        if (current) setRendering(false);
       }
     }, debounceMs);
 
-    return () => clearTimeout(timer);
+    return () => {
+      current = false;
+      clearTimeout(timer);
+    };
   }, [id, serialized, debounceMs]);
 
   // Blob URLs pin their buffer in memory until revoked; a few hundred previews
@@ -58,8 +58,9 @@ export function usePreview(id: number | null, ops: Operation[], debounceMs = 70)
   useEffect(() => {
     return () => {
       if (objectUrl.current) URL.revokeObjectURL(objectUrl.current);
+      objectUrl.current = null;
     };
-  }, []);
+  }, [id]);
 
-  return { url, rendering, error };
+  return { url: frame?.id === id ? frame.url : null, rendering, error };
 }

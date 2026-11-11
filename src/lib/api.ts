@@ -63,6 +63,12 @@ export interface BatchResult {
   message: string;
 }
 
+export interface BatchResize {
+  width: number;
+  height: number;
+  mode: "fit" | "exact";
+}
+
 export const batchExport = (
   ops: Operation[],
   paths: string[],
@@ -71,7 +77,8 @@ export const batchExport = (
   quality: number,
   matte: Color,
   suffix: string,
-) => invoke<BatchResult[]>("batch_export", { ops, paths, outDir, format, quality, matte, suffix });
+  resize: BatchResize | null,
+) => invoke<BatchResult[]>("batch_export", { ops, paths, outDir, format, quality, matte, suffix, resize });
 
 /** Raw PNG bytes, handed straight to a Blob — no base64 round-trip. */
 export async function renderPreview(id: number, ops: Operation[]): Promise<Blob> {

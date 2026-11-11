@@ -1,6 +1,6 @@
 use crate::favicon::{self, FaviconSet};
 use crate::loader;
-use crate::pipeline::{apply_all, apply_all_tracked, output_dims, Color, Operation};
+use crate::pipeline::{apply_all, apply_all_tracked, output_dims, Color, Operation, ResampleFilter};
 
 use base64::Engine;
 use image::{DynamicImage, ImageEncoder, ImageFormat};
@@ -179,13 +179,51 @@ pub struct BatchResult {
     pub message: String,
 }
 
+#[derive(Clone, Copy, Deserialize)]
+#[serde(rename_all = "lowercase")]
+enum BatchResizeMode {
+    Fit,
+    Exact,
+}
+
+#[derive(Clone, Copy, Deserialize)]
+pub struct BatchResize {
+    width: u32,
+    height: u32,
+    mode: BatchResizeMode,
+}
+
+impl BatchResize {
+    fn operation(self, source: (u32, u32)) -> Result<Operation, String> {
+        let (w, h) = (u64::from(source.0), u64::from(source.1));
+        let (mut width, mut height) = (u64::from(self.width), u64::from(self.height));
+        if matches!(self.mode, BatchResizeMode::Fit) {
+            width = width.min(w);
+            height = height.min(h);
+            if width * h <= height * w {
+                height = ((width * h + w / 2) / w).max(1);
+            } else {
+                width = ((height * w + h / 2) / h).max(1);
+            }
+        }
+        if width * height > 100_000_000 {
+            return Err("Batch resize is limited to 100 megapixels".into());
+        }
+        Ok(Operation::Resize {
+            width: width as u32,
+            height: height as u32,
+            filter: ResampleFilter::Lanczos3,
+        })
+    }
+}
+
 /// Apply the current pipeline to a list of files. Crop and other ratio-based ops
 /// are resolution-independent, so a pipeline built on one image is meaningful on
 /// a folder of differently sized ones.
 ///
 /// One bad file must not abort the run, so every path reports its own outcome.
 #[tauri::command]
-pub fn batch_export(
+pub async fn batch_export(
     ops: Vec<Operation>,
     paths: Vec<String>,
     out_dir: String,
@@ -193,7 +231,36 @@ pub fn batch_export(
     quality: u8,
     matte: Color,
     suffix: String,
+    resize: Option<BatchResize>,
 ) -> Result<Vec<BatchResult>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        write_batch(ops, paths, out_dir, format, quality, matte, suffix, resize)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+fn write_batch(
+    ops: Vec<Operation>,
+    paths: Vec<String>,
+    out_dir: String,
+    format: OutputFormat,
+    quality: u8,
+    matte: Color,
+    suffix: String,
+    resize: Option<BatchResize>,
+) -> Result<Vec<BatchResult>, String> {
+    if suffix.chars().any(|c| c.is_control() || r#"<>:"/\|?*"#.contains(c)) {
+        return Err("Filename suffix contains invalid characters".into());
+    }
+    if !(1..=100).contains(&quality) {
+        return Err("JPEG quality must be between 1 and 100".into());
+    }
+    if let Some(resize) = resize {
+        if !(1..=32768).contains(&resize.width) || !(1..=32768).contains(&resize.height) {
+            return Err("Batch resize dimensions must be between 1 and 32768 pixels".into());
+        }
+    }
     let dir = PathBuf::from(&out_dir);
     std::fs::create_dir_all(&dir).map_err(|e| format!("creating {out_dir}: {e}"))?;
 
@@ -210,7 +277,11 @@ pub fn batch_export(
 
             let run = || -> Result<PathBuf, String> {
                 let img = loader::load(&src)?;
-                let out = apply_all(img, &ops);
+                let mut out = apply_all(img, &ops);
+                if let Some(resize) = resize {
+                    let op = resize.operation((out.width(), out.height()))?;
+                    out = apply_all(out, &[op]);
+                }
 
                 let stem = src
                     .file_stem()
@@ -630,7 +701,7 @@ mod tests {
             height: 1.0,
         }];
 
-        let results = batch_export(
+        let results = write_batch(
             ops,
             vec![
                 a.to_string_lossy().into(),
@@ -642,6 +713,7 @@ mod tests {
             90,
             WHITE,
             "-out".into(),
+            None,
         )
         .unwrap();
 
@@ -668,7 +740,7 @@ mod tests {
         sample().save(&src).unwrap();
 
         // Same directory, no suffix, same extension.
-        let r = batch_export(
+        let r = write_batch(
             vec![],
             vec![src.to_string_lossy().into()],
             dir.to_string_lossy().into(),
@@ -676,6 +748,7 @@ mod tests {
             90,
             WHITE,
             "".into(),
+            None,
         )
         .unwrap();
 
@@ -698,7 +771,7 @@ mod tests {
         sample().save(&other).unwrap();
         std::fs::write(&existing, b"keep this file").unwrap();
 
-        let results = batch_export(
+        let results = write_batch(
             vec![],
             [&first, &second, &other].map(|path| path.to_string_lossy().into()).to_vec(),
             dir.to_string_lossy().into(),
@@ -706,6 +779,7 @@ mod tests {
             90,
             WHITE,
             "-out".into(),
+            None,
         )
         .unwrap();
 
@@ -726,7 +800,7 @@ mod tests {
         let src = scratch(&format!("batch-oversized-{}.png", std::process::id()));
         RgbaImage::new(300, 300).save(&src).unwrap();
         let dest = src.with_extension("ico");
-        let results = batch_export(
+        let results = write_batch(
             vec![],
             vec![src.to_string_lossy().into()],
             src.parent().unwrap().to_string_lossy().into(),
@@ -734,10 +808,25 @@ mod tests {
             90,
             WHITE,
             "".into(),
+            None,
         )
         .unwrap();
         assert!(!results[0].ok && results[0].message.contains("256x256"));
         assert!(!dest.exists(), "incomplete output was left behind");
         std::fs::remove_file(src).unwrap();
+    }
+
+    #[test]
+    fn batch_resize_fits_each_image_without_upscaling() {
+        let fit = BatchResize { width: 120, height: 80, mode: BatchResizeMode::Fit };
+        let dims = |resize: BatchResize, source| match resize.operation(source).unwrap() {
+            Operation::Resize { width, height, .. } => (width, height),
+            _ => unreachable!(),
+        };
+        assert_eq!(dims(fit, (640, 320)), (120, 60));
+        assert_eq!(dims(fit, (320, 640)), (40, 80));
+        assert_eq!(dims(fit, (24, 32)), (24, 32));
+        let exact = BatchResize { mode: BatchResizeMode::Exact, ..fit };
+        assert_eq!(dims(exact, (24, 32)), (120, 80));
     }
 }

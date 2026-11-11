@@ -1,13 +1,17 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open, save, message } from "@tauri-apps/plugin-dialog";
 
 import { Home } from "./components/Home";
+import { BatchWorkspace } from "./components/BatchWorkspace";
 import { SettingsModal } from "./components/SettingsModal";
 import { TitleBar } from "./components/TitleBar";
 import { Workspace } from "./components/Workspace";
 import { Sidebar } from "./components/Sidebar";
 import { ContextMenu, type MenuItem } from "./components/Menu";
+import { FIT_VIEWPORT } from "./components/CanvasView";
+import { useBatchQueue } from "./hooks/useBatchQueue";
 import { useHistory } from "./hooks/useHistory";
 import { useShellGuards } from "./hooks/useShellGuards";
 import {
@@ -19,6 +23,7 @@ import {
   type OutputFormat,
 } from "./lib/api";
 import { buildOps, isDirty, INITIAL_EDIT, type EditState } from "./lib/ops";
+import { readRecovery, writeRecovery, type RecoveryDraft } from "./lib/recovery";
 import { useSettings } from "./state/settings";
 import type { CategoryId, ToolId } from "./tools/registry";
 
@@ -34,14 +39,25 @@ export default function App() {
   // One document and one edit pipeline, shared by every tab. Tabs are *views*
   // onto the same image — crop in one, resize in another, and the operations
   // compose. Giving each tab its own copy would make composition impossible.
-  const [doc, setDoc] = useState<DocMeta | null>(null);
+  const [source, setSource] = useState<{ path: string; doc: DocMeta } | null>(null);
+  const doc = source?.doc ?? null;
   const history = useHistory<EditState>(INITIAL_EDIT);
+  const { reset, set: setEdit } = history;
   const edit = history.present;
+  const [exportedEdit, setExportedEdit] = useState(INITIAL_EDIT);
+  const unfinished = doc !== null && JSON.stringify(edit) !== JSON.stringify(exportedEdit);
+  const [recovery, setRecovery] = useState(readRecovery);
+  const [viewport, setViewport] = useState(FIT_VIEWPORT);
 
   const [openTools, setOpenTools] = useState<ToolId[]>([]);
   const [active, setActive] = useState<string>(HOME);
+  const batch = useBatchQueue();
+  const { addFiles: addBatchFiles, pickFiles: pickBatchFiles, running: batchRunning } = batch;
+  const batchActive = active === "batch";
   const [category, setCategory] = useState<CategoryId | "all">("all");
   const [exporting, setExporting] = useState(false);
+  const [fileBusy, setFileBusy] = useState(false);
+  const fileAction = useRef(false);
 
   const [formats, setFormats] = useState<OutputFormat[]>(["png"]);
   const [format, setFormat] = useState<OutputFormat>(settings.defaultFormat);
@@ -57,28 +73,53 @@ export default function App() {
     supportedFormats().then(setFormats);
   }, []);
 
-  const openId = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    if (!source) return;
+    const { name, width, height } = source.doc;
+    writeRecovery(unfinished ? {
+      version: 1, path: source.path, image: { name, width, height }, edit, format, quality,
+    } : null);
+  }, [source, unfinished, edit, format, quality]);
+
+  const runFileAction = useCallback(async <T,>(title: string, action: () => Promise<T>) => {
+    if (fileAction.current) return;
+    fileAction.current = true;
+    setFileBusy(true);
+    try {
+      return await action();
+    } catch (error) {
+      await message(String(error), { title, kind: "error" });
+    } finally {
+      fileAction.current = false;
+      setFileBusy(false);
+    }
+  }, []);
+
+  const resetDocument = useCallback(() => {
+    reset(INITIAL_EDIT);
+    setExportedEdit(INITIAL_EDIT);
+    setFaviconFiles([]);
+    setViewport(FIT_VIEWPORT);
+  }, [reset]);
 
   const load = useCallback(
-    async (path: string) => {
-      try {
-        const meta = await openImage(path);
-        // Free the previous document *before* swapping, and outside any state
-        // updater — StrictMode double-invokes those.
-        if (openId.current !== null) void closeImage(openId.current);
-        openId.current = meta.id;
-
-        setDoc(meta);
-        history.reset(INITIAL_EDIT);
-        setFaviconFiles([]);
-      } catch (e) {
-        await message(String(e), {
-          title: "Could not open image",
-          kind: "error",
-        });
+    async (path: string, draft?: RecoveryDraft) => {
+      const next = await openImage(path);
+      if (draft && (draft.image.width !== next.width || draft.image.height !== next.height)) {
+        await closeImage(next.id);
+        throw new Error("The source image dimensions changed. The recovery draft is still available.");
       }
+      if (doc) void closeImage(doc.id).catch(console.error);
+      setSource({ path, doc: next });
+      resetDocument();
+      if (draft) {
+        setEdit(draft.edit);
+        setFormat(draft.format);
+        setQuality(draft.quality);
+      }
+      setRecovery(null);
     },
-    [history],
+    [doc, resetDocument, setEdit],
   );
 
   const openTool = useCallback((tool: ToolId) => {
@@ -98,50 +139,16 @@ export default function App() {
     });
   }, []);
 
-  const closeDoc = useCallback(() => {
-    if (openId.current !== null) void closeImage(openId.current);
-    openId.current = null;
-    setDoc(null);
-    history.reset(INITIAL_EDIT);
-    setFaviconFiles([]);
-  }, [history]);
-
-  const pickFile = useCallback(async () => {
-    const path = await open({
-      multiple: false,
-      filters: [
-        {
-          name: "Images",
-          extensions: [
-            "png",
-            "jpg",
-            "jpeg",
-            "webp",
-            "bmp",
-            "tiff",
-            "tif",
-            "gif",
-            "ico",
-            "avif",
-          ],
-        },
-      ],
-    });
-    if (typeof path !== "string") return;
-    await load(path);
-    if (active === HOME) openTool(DEFAULT_DROP_TOOL);
-  }, [active, load, openTool]);
-
-  const onExport = useCallback(async () => {
-    if (!doc || exporting) return;
-    const base = doc.name.replace(/\.[^.]+$/, "");
-    const path = await save({
-      defaultPath: `${base}-edited.${format}`,
-      filters: [{ name: format.toUpperCase(), extensions: [format] }],
-    });
-    if (!path) return;
-    setExporting(true);
+  const exportCurrent = useCallback(async () => {
+    if (!doc) return false;
     try {
+      const base = doc.name.replace(/\.[^.]+$/, "");
+      const path = await save({
+        defaultPath: `${base}-edited.${format}`,
+        filters: [{ name: format.toUpperCase(), extensions: [format] }],
+      });
+      if (!path) return false;
+      setExporting(true);
       await exportImage(
         doc.id,
         buildOps(edit),
@@ -150,12 +157,119 @@ export default function App() {
         quality,
         settings.matte,
       );
+      setExportedEdit(edit);
+      return true;
     } catch (e) {
       await message(String(e), { title: "Export failed", kind: "error" });
+      return false;
     } finally {
       setExporting(false);
     }
-  }, [doc, edit, format, quality, settings.matte, exporting]);
+  }, [doc, edit, format, quality, settings.matte]);
+
+  const onExport = useCallback(async () => {
+    await runFileAction("Export failed", exportCurrent);
+  }, [runFileAction, exportCurrent]);
+
+  const confirmLeave = useCallback(async () => {
+    if (!unfinished || !doc) return true;
+    const choice = await message(`Export an edited copy of ${doc.name} before leaving?`, {
+      title: "Unfinished edits",
+      kind: "warning",
+      buttons: { yes: "Export", no: "Discard", cancel: "Cancel" },
+    });
+    return choice === "Discard" || (choice === "Export" && await exportCurrent());
+  }, [unfinished, doc, exportCurrent]);
+
+  const closeDoc = useCallback(() => {
+    void runFileAction("Could not close image", async () => {
+      if (!doc || !(await confirmLeave())) return;
+      await closeImage(doc.id);
+      writeRecovery(null);
+      setSource(null);
+      resetDocument();
+    });
+  }, [doc, runFileAction, confirmLeave, resetDocument]);
+
+  const confirmWindowClose = useRef<() => Promise<boolean>>(async () => false);
+  useLayoutEffect(() => {
+    confirmWindowClose.current = async () => (
+      await runFileAction("Could not close OpenImages", async () => {
+        if (batchRunning) {
+          await message("Wait for Batch Export to finish or stop it before closing OpenImages.", {
+            title: "Batch export in progress",
+            kind: "warning",
+          });
+          return false;
+        }
+        if (!(await confirmLeave())) return false;
+        if (doc) writeRecovery(null);
+        return true;
+      })
+    ) === true;
+  }, [runFileAction, confirmLeave, doc, batchRunning]);
+
+  useEffect(() => {
+    const unlisten = getCurrentWindow().onCloseRequested(async (event) => {
+      if (!(await confirmWindowClose.current())) event.preventDefault();
+    });
+    return () => void unlisten.then((stop) => stop());
+  }, []);
+
+  const recover = useCallback(() => {
+    if (!recovery) return;
+    void runFileAction("Could not restore edits", async () => {
+      const choice = await message(`Restore the unfinished edits to ${recovery.image.name}?`, {
+        title: "Recover unfinished edits",
+        buttons: { yes: "Restore", no: "Discard", cancel: "Later" },
+      });
+      if (choice === "Discard") {
+        writeRecovery(null);
+        setRecovery(null);
+      } else if (choice === "Restore") {
+        await load(recovery.path, recovery);
+        openTool(DEFAULT_DROP_TOOL);
+      }
+    });
+  }, [recovery, runFileAction, load, openTool]);
+
+  const recoveryPrompted = useRef(false);
+  useEffect(() => {
+    if (!recovery || recoveryPrompted.current) return;
+    recoveryPrompted.current = true;
+    recover();
+  }, [recovery, recover]);
+
+  const replaceImage = useCallback(async (path: string) => {
+    if (recovery) {
+      const choice = await message(`Opening another image will replace the recovery draft for ${recovery.image.name}.`, {
+        title: "Recovery draft available",
+        kind: "warning",
+        buttons: { ok: "Discard draft", cancel: "Cancel" },
+      });
+      if (choice !== "Discard draft") return;
+    }
+    if (!(await confirmLeave())) return;
+    await load(path);
+    if (active === HOME) openTool(DEFAULT_DROP_TOOL);
+  }, [recovery, confirmLeave, load, active, openTool]);
+
+  const pickFile = useCallback(async () => {
+    if (batchActive) {
+      await runFileAction("Could not add images", pickBatchFiles);
+      return;
+    }
+    await runFileAction("Could not open image", async () => {
+      const path = await open({
+        multiple: false,
+        filters: [{
+          name: "Images",
+          extensions: ["png", "jpg", "jpeg", "webp", "bmp", "tiff", "tif", "gif", "ico", "avif"],
+        }],
+      });
+      if (typeof path === "string") await replaceImage(path);
+    });
+  }, [batchActive, pickBatchFiles, runFileAction, replaceImage]);
 
   const selectCategory = (next: CategoryId | "all") => {
     setCategory(next);
@@ -165,23 +279,29 @@ export default function App() {
   // Tauri delivers OS file drops through the webview, not HTML drag events.
   useEffect(() => {
     const unlisten = getCurrentWebview().onDragDropEvent((e) => {
-      if (e.payload.type === "over") return setDropping(true);
+      if (e.payload.type === "over") {
+        return setDropping(!fileAction.current && !(batchActive && batchRunning));
+      }
       if (e.payload.type === "leave") return setDropping(false);
       if (e.payload.type !== "drop") return;
 
       setDropping(false);
+      if (fileAction.current) return;
+      if (batchActive) {
+        addBatchFiles(e.payload.paths);
+        return;
+      }
       const path = e.payload.paths[0];
       if (!path) return;
-      if (active === HOME) openTool(DEFAULT_DROP_TOOL);
-      void load(path);
+      void runFileAction("Could not open image", () => replaceImage(path));
     });
     return () => void unlisten.then((f) => f());
-  }, [active, openTool, load]);
+  }, [addBatchFiles, batchActive, batchRunning, runFileAction, replaceImage]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const mod = e.ctrlKey || e.metaKey;
-      if (!mod || e.defaultPrevented || showSettings) return;
+      if (!mod || e.defaultPrevented || showSettings || fileAction.current) return;
       if (
         ["z", "y"].includes(e.key.toLowerCase()) &&
         e.target instanceof HTMLElement &&
@@ -201,7 +321,7 @@ export default function App() {
       } else if (e.key.toLowerCase() === "o") {
         e.preventDefault();
         void pickFile();
-      } else if (e.key.toLowerCase() === "s" && doc) {
+      } else if (e.key.toLowerCase() === "s" && doc && !batchActive) {
         e.preventDefault();
         void onExport();
       } else if (e.key === ",") {
@@ -214,7 +334,7 @@ export default function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [history, active, closeTab, pickFile, doc, onExport, showSettings]);
+  }, [history, active, batchActive, closeTab, pickFile, doc, onExport, showSettings]);
 
   const tabs = useMemo(
     () => [
@@ -222,7 +342,7 @@ export default function App() {
       ...openTools.map((t) => ({
         id: t,
         toolId: t,
-        docName: doc?.name ?? null,
+        docName: t === "batch" ? null : (doc?.name ?? null),
       })),
     ],
     [openTools, doc],
@@ -230,14 +350,15 @@ export default function App() {
 
   const fileItems: MenuItem[] = [
     {
-      label: "Open image…",
+      label: batchActive ? "Add images…" : "Open image…",
       shortcut: "Ctrl O",
+      disabled: batchActive && batchRunning,
       onSelect: () => void pickFile(),
     },
     {
       label: exporting ? "Exporting…" : "Export image…",
       shortcut: "Ctrl S",
-      disabled: !doc || exporting,
+      disabled: !doc || exporting || batchActive,
       onSelect: () => void onExport(),
     },
     { label: "Close image", disabled: !doc || exporting, onSelect: closeDoc },
@@ -246,6 +367,7 @@ export default function App() {
       shortcut: "Ctrl ,",
       onSelect: () => setShowSettings(true),
     },
+    ...(recovery ? [{ label: "Recover unfinished edits…", onSelect: recover }] : []),
   ];
   const editItems: MenuItem[] = [
     {
@@ -294,7 +416,7 @@ export default function App() {
 
   return (
     <ContextMenu items={[...fileItems.slice(0, 2), ...editItems, fileItems[3]]}>
-      <div className={`app ${dropping ? "is-dropping" : ""}`}>
+      <div className={`app ${dropping ? "is-dropping" : ""}`} inert={fileBusy}>
         <TitleBar
           onHome={() => setActive(HOME)}
           menus={menus}
@@ -319,10 +441,14 @@ export default function App() {
                 category={category}
                 onCategoryChange={selectCategory}
               />
+            ) : batchActive ? (
+              <BatchWorkspace batch={batch} formats={formats} doc={doc} edit={edit} />
             ) : (
               <Workspace
                 tool={active as ToolId}
                 doc={doc}
+                viewport={viewport}
+                setViewport={setViewport}
                 edit={edit}
                 history={history}
                 onPickFile={pickFile}
@@ -353,7 +479,7 @@ export default function App() {
         )}
 
         <div className="dropveil" aria-hidden={!dropping}>
-          <span>Drop to open</span>
+          <span>{batchActive ? "Drop to add to batch" : "Drop to open"}</span>
         </div>
       </div>
     </ContextMenu>

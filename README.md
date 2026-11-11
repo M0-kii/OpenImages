@@ -4,6 +4,8 @@
 
 OpenImages is a desktop editor for cropping, resizing, adjusting, and converting images. Edits and exports run locally.
 
+[Download for Windows](https://github.com/M0-kii/OpenImages/releases/latest). Choose the x64 setup executable or MSI under Assets.
+
 ![OpenImages tool library with a searchable grid and category sidebar](docs/screenshots/library.png)
 
 ## Editing and export
@@ -15,9 +17,11 @@ OpenImages is a desktop editor for cropping, resizing, adjusting, and converting
 
 ![OpenImages workspace with an image preview, tool controls, and the export bar](docs/screenshots/workspace.png)
 
-Open an image with `Ctrl+O` or drop it into the window. Tool tabs share the same image and edits, so you can crop in one tab and resize in another. The export bar has Undo and Redo buttons; use `Ctrl+Z` and `Ctrl+Shift+Z` (or `Ctrl+Y`) from the keyboard. Reset can be undone too. Opening a new image starts a fresh history.
+Open an image with `Ctrl+O` or drop it into the window. Tool tabs share the same image, edit history, and canvas view. Linked resize uses the dimensions of your crop. Use Undo and Redo in the export bar, or press `Ctrl+Z` and `Ctrl+Shift+Z` (or `Ctrl+Y`).
 
-To reuse edits across files, open an image and set up your edits. Then open **Batch Export**, select the source images, and choose an output folder. Each file receives the current edits and export format. Batch Export keeps existing files intact and reports any filename conflicts.
+Before leaving an image with unfinished edits, choose **Export**, **Discard**, or **Cancel**. After an unexpected shutdown, OpenImages offers to restore the local edit draft using the original image file.
+
+Open **Batch Export** from the tool library and drop in images or choose **Add images**. Pick a format and choose whether to keep the original size, fit each image within a size limit, or set exact dimensions. Save those settings as a preset to use again. You can also apply edits from the open image before resizing. The queue shows progress for each file and reports filename conflicts while keeping existing files intact.
 
 ## Run from source
 

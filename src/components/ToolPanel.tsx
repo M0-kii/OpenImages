@@ -1,14 +1,11 @@
 import { useEffect, useState } from "react";
-import { open } from "@tauri-apps/plugin-dialog";
 import { ColorField } from "./ColorField";
 import { Slider } from "./Slider";
 import { Select } from "./Select";
 import { useDebounced } from "../hooks/useDebounced";
 import {
-  batchExport,
   dataUri,
   extractPalette,
-  type BatchResult,
   type DocMeta,
   type OutputFormat,
   type Swatch,
@@ -29,6 +26,8 @@ export interface PanelProps {
   setAspect: (a: number | null) => void;
   linked: boolean;
   setLinked: (v: boolean) => void;
+  resizeInputSize: [number, number] | null;
+  resizeInputError: string | null;
   onFavicon: () => void;
   faviconFiles: string[];
   busy: boolean;
@@ -91,7 +90,6 @@ export function ToolPanel(p: PanelProps) {
     case "favicon": return <FaviconPanel {...p} />;
     case "palette": return <PalettePanel {...p} />;
     case "datauri": return <DataUriPanel {...p} />;
-    case "batch": return <BatchPanel {...p} />;
   }
 }
 
@@ -124,16 +122,25 @@ function CropPanel({ edit, patch, aspect, setAspect }: PanelProps) {
         <button className="btn" disabled={!c} onClick={() => patch({ crop: null })}>
           Clear selection
         </button>
+        <p className="note">Crop previews the oriented image before resize and effects.</p>
       </Group>
     </>
   );
 }
 
-function ResizePanel({ doc, edit, patch, linked, setLinked }: PanelProps) {
-  // A quarter turn swaps which source axis feeds which output axis.
-  const swapped = edit.rotate % 180 !== 0;
-  const baseW = swapped ? doc.height : doc.width;
-  const baseH = swapped ? doc.width : doc.height;
+function ResizePanel({ edit, patch, linked, setLinked, resizeInputSize, resizeInputError }: PanelProps) {
+  if (!resizeInputSize) {
+    return (
+      <Group title="Dimensions">
+        {resizeInputError ? (
+          <p className="note note--err" role="alert">Could not calculate dimensions. {resizeInputError}</p>
+        ) : (
+          <p className="note" role="status">Calculating input dimensions…</p>
+        )}
+      </Group>
+    );
+  }
+  const [baseW, baseH] = resizeInputSize;
   const rz = edit.resize ?? { width: baseW, height: baseH, filter: "lanczos3" as const };
 
   const setDim = (axis: "width" | "height", raw: number) => {
@@ -735,102 +742,6 @@ function DataUriPanel({ doc, ops, format, quality }: PanelProps) {
             >
               {copied ? "Copied" : "Copy data URI"}
             </button>
-          </>
-        )}
-      </Group>
-    </>
-  );
-}
-
-const BATCH_EXTENSIONS = ["png", "jpg", "jpeg", "webp", "bmp", "tiff", "tif", "gif", "ico", "avif"];
-
-function BatchPanel({ ops, format, quality }: PanelProps) {
-  const { settings } = useSettings();
-  const [paths, setPaths] = useState<string[]>([]);
-  const [suffix, setSuffix] = useState("-edited");
-  const [results, setResults] = useState<BatchResult[] | null>(null);
-  const [running, setRunning] = useState(false);
-
-  const pick = async () => {
-    const picked = await open({
-      multiple: true,
-      filters: [{ name: "Images", extensions: BATCH_EXTENSIONS }],
-    });
-    if (Array.isArray(picked)) {
-      setPaths(picked);
-      setResults(null);
-    }
-  };
-
-  const run = async () => {
-    const dir = await open({ directory: true, title: "Where should the output go?" });
-    if (typeof dir !== "string") return;
-
-    setRunning(true);
-    setResults(null);
-    try {
-      setResults(await batchExport(ops, paths, dir, format, quality, settings.matte, suffix));
-    } catch (e) {
-      setResults([{ name: "batch", ok: false, message: String(e) }]);
-    } finally {
-      setRunning(false);
-    }
-  };
-
-  const failed = results?.filter((r) => !r.ok).length ?? 0;
-
-  return (
-    <>
-      <Group title="Files">
-        <button className="btn" onClick={pick}>
-          {paths.length ? `${paths.length} file${paths.length === 1 ? "" : "s"} selected` : "Choose files…"}
-        </button>
-        <p className="note">
-          The pipeline you built on the open image is applied to each file. Crop, vignette and the
-          other ratio-based tools adapt to each image's own size.
-        </p>
-        {ops.length === 0 && (
-          <p className="note">
-            <strong>No operations yet</strong> — files would be copied through, only re-encoded to
-            the chosen format.
-          </p>
-        )}
-      </Group>
-
-      <Group title="Naming">
-        <label className="numfield">
-          <span className="label">Filename suffix</span>
-          <input
-            type="text"
-            value={suffix}
-            spellCheck={false}
-            onChange={(e) => setSuffix(e.target.value)}
-          />
-        </label>
-        <p className="note">
-          Appended before the extension. Files with an existing destination are skipped.
-        </p>
-      </Group>
-
-      <Group title="Run">
-        <button className="btn btn--primary" disabled={!paths.length || running} onClick={run}>
-          {running ? `Processing ${paths.length}…` : "Choose folder & export"}
-        </button>
-
-        {results && (
-          <>
-            <p className="note">
-              {results.length - failed} of {results.length} written
-              {failed > 0 && <> · <strong>{failed} failed</strong></>}
-            </p>
-            <ul className="filelist filelist--batch">
-              {results.map((r) => (
-                <li key={r.name} className={r.ok ? "" : "is-err"}>
-                  <span className="truncate">{r.name}</span>
-                  <span className="filelist__msg">{r.ok ? r.message : r.message}</span>
-                </li>
-              ))}
-            </ul>
           </>
         )}
       </Group>

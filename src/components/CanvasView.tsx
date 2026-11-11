@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type Dispatch,
+  type SetStateAction,
+} from "react";
 import type { CropRect } from "../lib/ops";
 
 type Handle = "nw" | "n" | "ne" | "w" | "e" | "sw" | "s" | "se";
@@ -11,9 +18,19 @@ type Drag =
   | { mode: "resize"; handle: Handle; start: CropRect }
   | { mode: "pan"; ox: number; oy: number; start: { x: number; y: number } };
 
+export interface CanvasViewport {
+  zoom: number;
+  pan: { x: number; y: number };
+}
+
+export const FIT_VIEWPORT: CanvasViewport = { zoom: 1, pan: { x: 0, y: 0 } };
+
 interface Props {
   url: string | null;
   rendering: boolean;
+  pixelSize: [number, number] | null;
+  viewport: CanvasViewport;
+  setViewport: Dispatch<SetStateAction<CanvasViewport>>;
   cropMode: boolean;
   crop: CropRect | null;
   aspect: number | null;
@@ -32,6 +49,9 @@ const clamp = (n: number, lo: number, hi: number) =>
 export function CanvasView({
   url,
   rendering,
+  pixelSize,
+  viewport: { zoom, pan },
+  setViewport,
   cropMode,
   crop,
   aspect,
@@ -40,29 +60,21 @@ export function CanvasView({
   const canvasRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
 
-  const [zoom, setZoom] = useState(1);
-  const [pan, setPan] = useState({ x: 0, y: 0 });
   const [spaceHeld, setSpaceHeld] = useState(false);
   const drag = useRef<Drag | null>(null);
 
-  const fit = useCallback(() => {
-    setZoom(1);
-    setPan({ x: 0, y: 0 });
-  }, []);
-
-  // A new image should never inherit the last one's zoom.
-  useEffect(() => {
-    fit();
-  }, [url, fit]);
+  const fit = useCallback(() => setViewport(FIT_VIEWPORT), [setViewport]);
 
   /** Zoom where one image pixel covers one screen pixel. */
   const actualSize = useCallback(() => {
     const img = imgRef.current;
-    if (!img || !img.clientWidth) return;
+    if (!img?.clientWidth || !pixelSize || rendering) return;
     // Layout size is the fitted size; the transform scales on top of it.
-    setZoom(clamp(img.naturalWidth / img.clientWidth, MIN_ZOOM, MAX_ZOOM));
-    setPan({ x: 0, y: 0 });
-  }, []);
+    setViewport({
+      zoom: clamp(pixelSize[0] / img.clientWidth, MIN_ZOOM, MAX_ZOOM),
+      pan: FIT_VIEWPORT.pan,
+    });
+  }, [pixelSize, rendering, setViewport]);
 
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
@@ -100,19 +112,22 @@ export function CanvasView({
   const zoomAt = useCallback(
     (factor: number, clientX?: number, clientY?: number) => {
       const box = canvasRef.current?.getBoundingClientRect();
-      setZoom((z) => {
-        const next = clamp(z * factor, MIN_ZOOM, MAX_ZOOM);
+      setViewport(({ zoom, pan }) => {
+        const next = clamp(zoom * factor, MIN_ZOOM, MAX_ZOOM);
         if (box && clientX !== undefined && clientY !== undefined) {
           // Transform origin is the canvas center, so measure the cursor from there.
           const cx = clientX - (box.left + box.width / 2);
           const cy = clientY - (box.top + box.height / 2);
-          const k = next / z;
-          setPan((p) => ({ x: cx - (cx - p.x) * k, y: cy - (cy - p.y) * k }));
+          const k = next / zoom;
+          return {
+            zoom: next,
+            pan: { x: cx - (cx - pan.x) * k, y: cy - (cy - pan.y) * k },
+          };
         }
-        return next;
+        return { zoom: next, pan };
       });
     },
-    [],
+    [setViewport],
   );
 
   const onWheel = (e: React.WheelEvent) => {
@@ -122,7 +137,8 @@ export function CanvasView({
 
   /** Pointer position as a fraction of the rendered image box. */
   const toNorm = (e: React.PointerEvent) => {
-    const box = imgRef.current!.getBoundingClientRect();
+    const box = imgRef.current?.getBoundingClientRect();
+    if (!box?.width || !box.height) return null;
     return {
       x: clamp01((e.clientX - box.left) / box.width),
       y: clamp01((e.clientY - box.top) / box.height),
@@ -144,6 +160,8 @@ export function CanvasView({
     if (e.button !== 0) return;
     if (!cropMode) return startPan(e);
 
+    const point = toNorm(e);
+    if (!point) return;
     const handle = (e.target as HTMLElement).dataset.handle as
       | Handle
       | undefined;
@@ -154,7 +172,7 @@ export function CanvasView({
       return;
     }
 
-    const { x, y } = toNorm(e);
+    const { x, y } = point;
     const inside =
       crop &&
       x >= crop.x &&
@@ -175,24 +193,30 @@ export function CanvasView({
     if (!d) return;
 
     if (d.mode === "pan") {
-      setPan({
+      const next = {
         x: d.start.x + (e.clientX - d.ox),
         y: d.start.y + (e.clientY - d.oy),
-      });
+      };
+      setViewport((view) => ({ ...view, pan: next }));
       return;
     }
-    if (!imgRef.current) return;
-    const { x, y, box } = toNorm(e);
+    if (!cropMode) return;
+    const point = toNorm(e);
+    if (!point) return;
+    const { x, y, box } = point;
+    const imageBounds = pixelSize
+      ? { width: pixelSize[0], height: pixelSize[1] }
+      : box;
 
     if (d.mode === "new") {
-      onCrop(rectFromCorners(d.ox, d.oy, x, y, aspect, box));
+      onCrop(rectFromCorners(d.ox, d.oy, x, y, aspect, imageBounds));
     } else if (d.mode === "move") {
       // Shift the whole rect, clamping so it can't leave the image.
       const dx = clamp(x - d.ox, -d.start.x, 1 - d.start.x - d.start.width);
       const dy = clamp(y - d.oy, -d.start.y, 1 - d.start.y - d.start.height);
       onCrop({ ...d.start, x: d.start.x + dx, y: d.start.y + dy });
     } else {
-      onCrop(resizeRect(d.start, d.handle, x, y, aspect, box));
+      onCrop(resizeRect(d.start, d.handle, x, y, aspect, imageBounds));
     }
   };
 
@@ -323,6 +347,7 @@ export function CanvasView({
         <button
           className="zoombar__btn zoombar__btn--wide"
           onClick={actualSize}
+          disabled={!pixelSize || rendering}
           title="Ctrl+1"
         >
           1:1
@@ -333,7 +358,9 @@ export function CanvasView({
 }
 
 /** Aspect is a ratio of pixels, but x/y are fractions of differently sized axes. */
-function applyAspect(w: number, h: number, aspect: number, box: DOMRect) {
+type ImageBounds = Pick<DOMRect, "width" | "height">;
+
+function applyAspect(w: number, h: number, aspect: number, box: ImageBounds) {
   const wPx = w * box.width;
   const hPx = h * box.height;
   if (wPx / Math.max(hPx, 1e-6) > aspect)
@@ -347,7 +374,7 @@ function rectFromCorners(
   x: number,
   y: number,
   aspect: number | null,
-  box: DOMRect,
+  box: ImageBounds,
 ): CropRect {
   let w = Math.abs(x - ox);
   let h = Math.abs(y - oy);
@@ -374,7 +401,7 @@ function resizeRect(
   x: number,
   y: number,
   aspect: number | null,
-  box: DOMRect,
+  box: ImageBounds,
 ): CropRect {
   let left = start.x;
   let top = start.y;

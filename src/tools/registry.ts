@@ -332,7 +332,7 @@ export const TOOLS: Tool[] = [
   {
     id: "batch",
     name: "Batch Export",
-    blurb: "Apply this pipeline to many files at once.",
+    blurb: "Resize and export multiple images.",
     category: "output",
     glyph: "≣",
     keywords: [
@@ -340,7 +340,6 @@ export const TOOLS: Tool[] = [
       "resize all", "convert all", "process", "queue",
     ],
     hasExport: false,
-    needsFormat: true,
   },
 ];
 

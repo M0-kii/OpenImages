@@ -180,13 +180,15 @@ export function isDirty(e: EditState): boolean {
  * corners round through the border rather than leaving square tabs sticking out,
  * and `dropShadow` dead last because it reads the finished alpha silhouette.
  */
-export function buildOps(e: EditState): Operation[] {
+export function buildOps(e: EditState, before?: "crop" | "resize"): Operation[] {
   const ops: Operation[] = [];
 
   if (e.rotate % 360 !== 0) ops.push({ kind: "rotate", degrees: e.rotate % 360 });
   if (e.flipH || e.flipV) ops.push({ kind: "flip", horizontal: e.flipH, vertical: e.flipV });
+  if (before === "crop") return ops;
   if (e.crop) ops.push({ kind: "crop", ...e.crop });
   if (e.colorKey) ops.push({ kind: "colorKey", ...e.colorKey });
+  if (before === "resize") return ops;
   if (e.resize) ops.push({ kind: "resize", ...e.resize });
   if (e.pad) ops.push({ kind: "pad", ...e.pad });
 

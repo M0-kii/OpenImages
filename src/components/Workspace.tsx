@@ -1,7 +1,14 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type Dispatch,
+  type SetStateAction,
+} from "react";
 import { open, message } from "@tauri-apps/plugin-dialog";
 
-import { CanvasView } from "./CanvasView";
+import { CanvasView, type CanvasViewport } from "./CanvasView";
 import { ExportBar } from "./ExportBar";
 import { ToolPanel } from "./ToolPanel";
 import { ToolIcon } from "./ToolIcon";
@@ -13,12 +20,20 @@ import {
   type DocMeta,
   type OutputFormat,
 } from "../lib/api";
-import { buildOps, INITIAL_EDIT, isDirty, type EditState } from "../lib/ops";
+import {
+  buildOps,
+  INITIAL_EDIT,
+  isDirty,
+  type EditState,
+  type Operation,
+} from "../lib/ops";
 import { toolById, type ToolId } from "../tools/registry";
 
 interface Props {
   tool: ToolId;
   doc: DocMeta | null;
+  viewport: CanvasViewport;
+  setViewport: Dispatch<SetStateAction<CanvasViewport>>;
   edit: EditState;
   history: History<EditState>;
   onPickFile: () => Promise<void>;
@@ -38,13 +53,42 @@ interface Props {
   setFaviconFiles: (f: string[]) => void;
 }
 
+function useOutputSize(doc: DocMeta | null, ops: Operation[]) {
+  const id = doc?.id;
+  const key = JSON.stringify(ops);
+  const [result, setResult] = useState<{
+    id: number;
+    key: string;
+    size: [number, number] | null;
+    error: string | null;
+  } | null>(null);
+
+  useEffect(() => {
+    if (id === undefined || key === "[]") return;
+    let stale = false;
+    outputSize(id, JSON.parse(key)).then(
+      (size) => !stale && setResult({ id, key, size, error: null }),
+      (error) => !stale && setResult({ id, key, size: null, error: String(error) }),
+    );
+    return () => {
+      stale = true;
+    };
+  }, [id, key]);
+
+  if (doc && key === "[]") {
+    return { size: [doc.width, doc.height] as [number, number], error: null };
+  }
+  return result && result.id === id && result.key === key
+    ? result
+    : { size: null, error: null };
+}
+
 export function Workspace(p: Props) {
   const { doc, edit, tool: toolId } = p;
   const tool = toolById(toolId);
 
   const [faviconBusy, setBusy] = useState(false);
   const busy = faviconBusy || p.exporting;
-  const [size, setSize] = useState<[number, number] | null>(null);
 
   /** Each field name becomes its own coalesce group, so a slider drag is one undo step. */
   const patch = useCallback(
@@ -56,29 +100,18 @@ export function Workspace(p: Props) {
 
   const pickFile = p.onPickFile;
 
-  // The crop tool is *always* cropping, so the preview must render uncropped —
-  // you can't drag a rectangle around a region the preview has already removed.
   const cropping = toolId === "crop";
-  const previewOps = useMemo(
-    () => buildOps(cropping ? { ...edit, crop: null } : edit),
-    [edit, cropping],
-  );
-  const { url, rendering, error } = usePreview(doc?.id ?? null, previewOps);
-
+  const stage = cropping ? "crop" : toolId === "resize" ? "resize" : null;
   const ops = useMemo(() => buildOps(edit), [edit]);
-  const opsKey = JSON.stringify(ops);
-
-  useEffect(() => {
-    if (!doc) {
-      setSize(null);
-      return;
-    }
-    let stale = false;
-    outputSize(doc.id, JSON.parse(opsKey)).then((s) => !stale && setSize(s));
-    return () => {
-      stale = true;
-    };
-  }, [doc, opsKey]);
+  // Crop coordinates refer to the oriented input, before any later geometry.
+  const stageOps = useMemo(
+    () => (stage ? buildOps(edit, stage) : []),
+    [edit, stage],
+  );
+  const previewOps = cropping ? stageOps : ops;
+  const { url, rendering, error } = usePreview(doc?.id ?? null, previewOps);
+  const { size } = useOutputSize(doc, ops);
+  const input = useOutputSize(stage ? doc : null, stageOps);
 
   const onFavicon = useCallback(async () => {
     if (!doc) return;
@@ -138,7 +171,10 @@ export function Workspace(p: Props) {
         <CanvasView
           url={url}
           rendering={rendering}
-          cropMode={cropping}
+          pixelSize={cropping ? input.size : size}
+          viewport={p.viewport}
+          setViewport={p.setViewport}
+          cropMode={cropping && !rendering && !error}
           crop={edit.crop}
           aspect={p.aspect}
           onCrop={(crop) => patch({ crop })}
@@ -177,6 +213,8 @@ export function Workspace(p: Props) {
           setAspect={p.setAspect}
           linked={p.linked}
           setLinked={p.setLinked}
+          resizeInputSize={input.size}
+          resizeInputError={input.error}
           onFavicon={onFavicon}
           faviconFiles={p.faviconFiles}
           busy={busy}
